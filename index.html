@@ -6,7 +6,7 @@
 <title>Adv Shot</title>
 <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:wght@400;700&family=Cormorant+Garamond:wght@300;400;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
- <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+
 <style>
 :root{--black:#20211F;--gray:#DBDBDB;--taupe:#716B5B;--beige:#BCAF95;--bg:#F5F3EF;--white:#fff;--red:#c0392b;--green:#16a34a;--orange:#d97706;}
 *{box-sizing:border-box;margin:0;padding:0;}
@@ -2364,15 +2364,6 @@ function exportCSV(){
   const csv=rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
   const b=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='advshot-crm.csv';a.click();
 }
-  // ═══ SUPABASE ═══════════════════════════════
-const supabaseUrl = 'https://advshot-git-main-devbarreiros-projects.vercel.app/'
-
-const supabaseKey = 'sb_publishable_k7u_azd6k4olFFqJEp-Ukw_38bvYwFb'
-
-const supabase = window.supabase.createClient(
-  supabaseUrl,
-  supabaseKey
-)
 
 console.log('✅ Supabase conectado!')
 </script>
