@@ -415,10 +415,17 @@ body,input,select,textarea,.card,.modal,.ci,.crm-card,.stat-box,.fu-card,.tpl-ca
     </div>
     <!-- User logado -->
     <div id="userMenu" style="display:none;align-items:center;gap:6px;">
-      <img id="userAvatar" src="" style="width:28px;height:28px;border-radius:50%;border:2px solid rgba(255,255,255,.3);" alt="">
-      <span id="userName" style="font-size:.72rem;color:rgba(255,255,255,.7);max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+      <div id="userAvatarWrap" style="position:relative;flex-shrink:0;">
+        <img id="userAvatar" src="" width="30" height="30"
+          style="border-radius:50%;border:2px solid var(--beige);object-fit:cover;display:block;"
+          onerror="this.style.display='none';$id('userInitials').style.display='flex';" alt="">
+        <div id="userInitials"
+          style="display:none;width:30px;height:30px;border-radius:50%;background:var(--taupe);color:#fff;font-size:.72rem;font-weight:700;align-items:center;justify-content:center;border:2px solid var(--beige);font-family:'Libre Baskerville',serif;"></div>
+        <div style="position:absolute;bottom:0;right:0;width:9px;height:9px;background:#4ade80;border-radius:50%;border:1.5px solid var(--black);"></div>
+      </div>
+      <span id="userName" style="font-size:.74rem;color:rgba(255,255,255,.9);max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;"></span>
       <button onclick="signOutUser()" title="Sair"
-        style="background:none;border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.5);width:24px;height:24px;border-radius:50%;cursor:pointer;font-size:.7rem;display:flex;align-items:center;justify-content:center;"
+        style="background:none;border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.5);width:22px;height:22px;border-radius:50%;cursor:pointer;font-size:.65rem;display:flex;align-items:center;justify-content:center;flex-shrink:0;"
         onmouseover="this.style.borderColor='#f87171';this.style.color='#f87171'" onmouseout="this.style.borderColor='rgba(255,255,255,.2)';this.style.color='rgba(255,255,255,.5)'">✕</button>
     </div>
   </div>
@@ -426,6 +433,16 @@ body,input,select,textarea,.card,.modal,.ci,.crm-card,.stat-box,.fu-card,.tpl-ca
 
 <!-- HOME -->
 <div class="page active" id="page-home">
+  <!-- CARD DE BOAS-VINDAS (aparece quando logado) -->
+  <div id="welcomeCard" style="display:none;background:linear-gradient(135deg,var(--taupe),var(--black));border-radius:14px;padding:16px 20px;margin-bottom:14px;display:none;align-items:center;gap:14px;">
+    <img id="welcomeAvatar" src="" width="48" height="48" style="border-radius:50%;border:3px solid var(--beige);object-fit:cover;flex-shrink:0;" onerror="this.style.display='none'" alt="">
+    <div id="welcomeInitials" style="display:none;width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,.2);color:#fff;font-size:1.1rem;font-weight:700;align-items:center;justify-content:center;border:3px solid var(--beige);font-family:'Libre Baskerville',serif;flex-shrink:0;"></div>
+    <div>
+      <div style="font-family:'Libre Baskerville',serif;font-size:1rem;font-weight:700;color:#fff;" id="welcomeName">Olá!</div>
+      <div style="font-size:.74rem;color:rgba(255,255,255,.7);" id="welcomeEmail"></div>
+    </div>
+    <button onclick="signOutUser()" style="margin-left:auto;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.7);padding:5px 12px;border-radius:8px;cursor:pointer;font-size:.72rem;flex-shrink:0;">Sair</button>
+  </div>
   <div class="hero"><h2>✦ ADV SHOT</h2><p>CRM inteligente com IA para advocacia e vendas</p></div>
   <div class="stats-grid">
     <div class="stat-box"><div class="n" id="h-tot">0</div><div class="l">Leads</div></div>
@@ -1022,11 +1039,20 @@ function initSupabase(){
       if(event==='SIGNED_IN') toast('✅ Bem-vindo, '+( currentUser?.user_metadata?.full_name?.split(' ')[0]||'')+'!');
       if(event==='SIGNED_OUT') toast('👋 Até logo!');
     });
-    // Check existing session
+    // Check existing session (with small delay for OAuth redirect to settle)
     sbClient.auth.getSession().then(({data:{session}})=>{
       currentUser=session?.user||null;
       updateAuthUI();
     });
+    // Retry after 1s in case OAuth redirect is still processing
+    setTimeout(()=>{
+      sbClient.auth.getSession().then(({data:{session}})=>{
+        if(!currentUser&&session?.user){
+          currentUser=session.user;
+          updateAuthUI();
+        }
+      });
+    },1000);
     console.log('✅ Supabase conectado');
   }catch(e){console.error('Supabase init error:',e);}
 }
@@ -1047,19 +1073,55 @@ function signOutUser(){
 function updateAuthUI(){
   const authDiv=$id('authBtn');
   const userDiv=$id('userMenu');
+  const welcomeCard=$id('welcomeCard');
   if(!authDiv||!userDiv)return;
+
   if(currentUser){
+    // Esconde botão Entrar, mostra menu do usuário
     authDiv.style.display='none';
     userDiv.style.display='flex';
+
     const avatar=currentUser.user_metadata?.avatar_url||'';
-    const name=currentUser.user_metadata?.full_name||currentUser.email||'Usuário';
+    const fullName=currentUser.user_metadata?.full_name||currentUser.email||'Usuário';
+    const firstName=fullName.split(' ')[0];
+    const initials=fullName.split(' ').map(n=>n[0]).slice(0,2).join('').toUpperCase();
+
+    // Nav — avatar ou iniciais
     const img=$id('userAvatar');
+    const ini=$id('userInitials');
     const nm=$id('userName');
-    if(img){img.src=avatar;img.style.display=avatar?'block':'none';}
-    if(nm)nm.textContent=name.split(' ')[0];
+    if(img&&ini){
+      if(avatar){
+        img.src=avatar;
+        img.style.display='block';
+        ini.style.display='none';
+      }else{
+        img.style.display='none';
+        ini.textContent=initials;
+        ini.style.display='flex';
+      }
+    }
+    if(nm)nm.textContent=firstName;
+
+    // Card de boas-vindas na Home
+    if(welcomeCard){
+      welcomeCard.style.display='flex';
+      const wa=$id('welcomeAvatar');
+      const wi=$id('welcomeInitials');
+      const wn=$id('welcomeName');
+      const we=$id('welcomeEmail');
+      if(wa&&wi){
+        if(avatar){wa.src=avatar;wa.style.display='block';wi.style.display='none';}
+        else{wa.style.display='none';wi.textContent=initials;wi.style.display='flex';}
+      }
+      if(wn)wn.textContent='Olá, '+firstName+'!';
+      if(we)we.textContent=currentUser.email||'';
+    }
   }else{
+    // Não logado
     authDiv.style.display='block';
     userDiv.style.display='none';
+    if(welcomeCard)welcomeCard.style.display='none';
   }
 }
 
