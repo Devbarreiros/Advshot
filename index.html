@@ -792,7 +792,9 @@ body,input,select,textarea,.card,.modal,.ci,.crm-card,.stat-box,.fu-card,.tpl-ca
             <button class="btn btn-ghost" style="font-size:.72rem;" onclick="showUploadArea()">➕ Adicionar leads</button>
           </div>
         </div>
-        <div id="lvEstadoTabs" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--gray);"></div>
+        <div id="lvEstadoTabs" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--gray);">
+          <div style="width:100%;font-size:.72rem;font-weight:700;color:var(--taupe);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">📍 Filtrar por estado:</div>
+        </div>
         <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
           <input type="text" id="lvSearch" placeholder="🔍 Buscar por nome ou tag..." oninput="lvSearchDebounce()" style="flex:1;min-width:160px;">
           <select id="lvCategoriaSel" onchange="lvPage=0;loadLeadsPage()" style="min-width:100px;"><option value="">Categoria</option></select>
@@ -2368,21 +2370,33 @@ function renderLocalLeadsTable(){
   const estados=[...new Set(_parsedLeads.map(l=>l.sheet_name||l.estado).filter(Boolean))].sort();
   const tabEl=$id('lvEstadoTabs');
   if(tabEl){
-    const mkTab=(label,filter)=>{
-      const leads=filter?_parsedLeads.filter(filter):_parsedLeads;
+    // Botão "Todos" hardcoded para evitar bugs com emoji no replace
+    const pendAll=_parsedLeads.filter(l=>!l.done).length;
+    const totAll=_parsedLeads.length;
+    const activeAll=lvEstado==='';
+    const allBtn='<button onclick="lvSetEstado(\'\')" '
+      +'style="padding:7px 14px;border-radius:8px;font-size:.78rem;font-weight:700;cursor:pointer;white-space:nowrap;'
+      +'border:2px solid '+(activeAll?'var(--taupe)':'var(--gray)')+';'
+      +'background:'+(activeAll?'var(--taupe)':'var(--white)')+';'
+      +'color:'+(activeAll?'#fff':'var(--black)')+';margin-top:4px;">'
+      +'📍 Todos <span style="font-size:.65rem;opacity:.75;">('+pendAll+'/'+totAll+')</span></button>';
+
+    const stateBtns=estados.map(e=>{
+      const leads=_parsedLeads.filter(l=>l.sheet_name===e||l.estado===e);
       const pend=leads.filter(l=>!l.done).length;
       const tot=leads.length;
-      const active=filter?lvEstado===label:lvEstado==='';
-      return'<button onclick="lvSetEstado(\''+label+'\')" style="padding:7px 12px;border-radius:8px;'
-        +'font-size:.78rem;font-weight:700;cursor:pointer;white-space:nowrap;'
+      const active=lvEstado===e;
+      return'<button onclick="lvSetEstado(\''+e+'\')" '
+        +'style="padding:7px 14px;border-radius:8px;font-size:.78rem;font-weight:700;cursor:pointer;white-space:nowrap;'
         +'border:2px solid '+(active?'var(--taupe)':'var(--gray)')+';'
         +'background:'+(active?'var(--taupe)':'var(--white)')+';'
-        +'color:'+(active?'#fff':'var(--black)')+';">'
-        +label+' <span style="font-size:.65rem;opacity:.75;">('+pend+'/'+tot+')</span></button>';
-    };
-    const allBtn=mkTab('📍 Todos',null).replace("lvSetEstado(\'📍 Todos\')",'lvSetEstado(\'\')');
-    const stateBtns=estados.map(e=>mkTab(e,l=>l.sheet_name===e||l.estado===e));
-    tabEl.innerHTML=[allBtn,...stateBtns].join('');
+        +'color:'+(active?'#fff':'var(--black)')+';margin-top:4px;">'
+        +e+' <span style="font-size:.65rem;opacity:.75;">('+pend+'/'+tot+')</span></button>';
+    });
+
+    // Preserva o label "Filtrar por estado:" no início
+    tabEl.innerHTML='<div style="width:100%;font-size:.72rem;font-weight:700;color:var(--taupe);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">📍 Filtrar por estado:</div>'
+      +[allBtn,...stateBtns].join('');
   }
 
   // Tags
@@ -2424,21 +2438,27 @@ function lvToggleLocal(phone){
 
 
 async function initLeadsViewer(){
+  // Se já tiver leads locais carregados, apenas re-renderiza
+  if(_lvMode==='local'&&_parsedLeads.length>0){
+    setDisplay('importUploadCard','none');
+    setDisplay('leadsViewerCard','block');
+    renderLocalLeadsTable();
+    return;
+  }
   if(!sbClient){
     setDisplay('importUploadCard','block');
     setDisplay('leadsViewerCard','none');
     const el=$id('importSbStatus');
-    if(el)el.innerHTML='<div style="background:#fdf2f2;border:1px solid #f5c6c6;border-radius:8px;padding:10px;font-size:.76rem;color:var(--red);">❌ Supabase não conectado. Verifique a configuração.</div>';
+    if(el)el.innerHTML='<div style="background:#fdf2f2;border:1px solid #f5c6c6;border-radius:8px;padding:10px;font-size:.76rem;color:var(--red);">❌ Supabase não conectado.</div>';
     return;
   }
-  // Verifica se já tem leads no Supabase
   const{count}=await sbClient.from('contacts').select('*',{count:'exact',head:true}).eq('source','planilha');
   if(count&&count>0){
     setDisplay('importUploadCard','none');
     setDisplay('leadsViewerCard','block');
     await loadEstadoTabs();
     await loadLeadsPage();
-  } else {
+  }else{
     setDisplay('importUploadCard','block');
     setDisplay('leadsViewerCard','none');
     const el=$id('importSbStatus');
@@ -2876,6 +2896,12 @@ function markXlsxRowSent(sheetName, rowIdx){
   // Atualiza na memória local
   const lead=_parsedLeads.find(l=>l.sheet_name===wsName&&l.rowIdx===rowIdx);
   if(lead){lead.done=true;lead.col_e='ENVIADO';lead.col_f=dateStr;}
+
+  // Re-renderiza a tabela de leads se estiver no modo local
+  if(_lvMode==='local'&&_parsedLeads.length>0){
+    // Pequeno delay para não travar a UI durante o disparo
+    setTimeout(()=>renderLocalLeadsTable(),300);
+  }
 
   // Marca que há mudanças não salvas
   _xlsxModified=true;
