@@ -827,8 +827,10 @@ body,input,select,textarea,.card,.modal,.ci,.crm-card,.stat-box,.fu-card,.tpl-ca
             <button class="btn btn-taupe" style="min-height:42px;" onclick="lvSendToDisp()">
               🚀 Enviar <span id="lvSelCount">0</span> ao Disparador
             </button>
-            <button id="btnDownloadXlsx" onclick="downloadUpdatedXlsx()" style="display:none;min-height:42px;background:var(--green);color:#fff;border:none;border-radius:10px;padding:8px 14px;font-size:.8rem;cursor:pointer;font-weight:700;">
-              ⬇️ Baixar planilha atualizada
+            <button id="btnDownloadXlsx" onclick="downloadUpdatedXlsx()"
+              style="min-height:42px;background:var(--gray);color:#aaa;border:2px solid var(--gray);border-radius:10px;padding:8px 14px;font-size:.8rem;cursor:default;font-weight:700;"
+              disabled title="Disponível após os primeiros envios">
+              ⬇️ Baixar planilha
             </button>
           </div>
         </div>
@@ -2875,16 +2877,37 @@ function markXlsxRowSent(sheetName, rowIdx){
   const lead=_parsedLeads.find(l=>l.sheet_name===wsName&&l.rowIdx===rowIdx);
   if(lead){lead.done=true;lead.col_e='ENVIADO';lead.col_f=dateStr;}
 
-  // Destaca botão de download
+  // Marca que há mudanças não salvas
+  _xlsxModified=true;
+
+  // Ativa botão de download
   const dlBtn=$id('btnDownloadXlsx');
   if(dlBtn){
-    dlBtn.style.display='block';
+    dlBtn.disabled=false;
     dlBtn.style.background='var(--green)';
     dlBtn.style.color='#fff';
-    dlBtn.textContent='⬇️ Baixar planilha atualizada';
+    dlBtn.style.borderColor='var(--green)';
+    dlBtn.style.cursor='pointer';
+    dlBtn.innerHTML='⬇️ Baixar planilha atualizada <span style="font-size:.65rem;background:rgba(255,255,255,.3);padding:2px 6px;border-radius:99px;" id="dlCount">1</span>';
   }
-}
 
+  // Atualiza contador de enviados no botão
+  const dlCount=$id('dlCount');
+  if(dlCount){
+    const n=_parsedLeads.filter(l=>l.done&&l.col_e==='ENVIADO').length;
+    dlCount.textContent=n;
+  }
+} // fim markXlsxRowSent
+
+// ═══ AVISO DE SAÍDA SEM SALVAR ═══════════════════════════
+let _xlsxModified=false;
+window.addEventListener('beforeunload',function(e){
+  if(_xlsxModified&&importWB){
+    e.preventDefault();
+    e.returnValue='Você tem envios não salvos na planilha. Baixe o arquivo antes de sair!';
+    return e.returnValue;
+  }
+});
 
 // ═══ WEBHOOKS / CONEXÕES ══════════════════════════════════
 function renderWebhooks(){
