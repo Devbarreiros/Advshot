@@ -2867,46 +2867,40 @@ async function uploadLeadsToSb(leads,estadosList){
 }
 
 function markXlsxRowSent(sheetName, rowIdx){
-  if(!importWB||rowIdx==null)return;
+  if(rowIdx==null)return;
 
-  // Encontra a aba certa
-  const wsName=sheetName||importWB.SheetNames[0];
-  const ws=importWB.Sheets[wsName];
-  if(!ws)return;
-
-  const colE=4, colF=5;
   const now=new Date();
   const dateStr=now.toLocaleDateString('pt-BR')+' '+now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
-  const verde='C6EFCE'; // RGB(198,239,206) — mesmo verde do VBA
 
-  // Coluna E = "ENVIADO" com fundo verde
-  const cellE=XLSX.utils.encode_cell({r:rowIdx,c:colE});
-  ws[cellE]={v:'ENVIADO',t:'s',s:{fill:{patternType:'solid',fgColor:{rgb:verde}},font:{color:{rgb:'276221'},bold:true}}};
-
-  // Coluna F = data/hora
-  const cellF=XLSX.utils.encode_cell({r:rowIdx,c:colF});
-  ws[cellF]={v:dateStr,t:'s'};
-
-  // Atualiza range
-  const ref=ws['!ref']?XLSX.utils.decode_range(ws['!ref']):{s:{r:0,c:0},e:{r:0,c:0}};
-  if(rowIdx>ref.e.r)ref.e.r=rowIdx;
-  if(colF>ref.e.c)ref.e.c=colF;
-  ws['!ref']=XLSX.utils.encode_range(ref);
-
-  // Atualiza na memória local
-  const lead=_parsedLeads.find(l=>l.sheet_name===wsName&&l.rowIdx===rowIdx);
-  if(lead){lead.done=true;lead.col_e='ENVIADO';lead.col_f=dateStr;}
-
-  // Re-renderiza a tabela de leads se estiver no modo local
-  if(_lvMode==='local'&&_parsedLeads.length>0){
-    // Pequeno delay para não travar a UI durante o disparo
-    setTimeout(()=>renderLocalLeadsTable(),300);
+  // ── 1. Atualiza _parsedLeads em memória (sempre, independente do xlsx) ──
+  if(_parsedLeads.length>0){
+    const lead=_parsedLeads.find(l=>
+      (l.sheet_name===sheetName||(l.rowIdx===rowIdx&&!sheetName))&&l.rowIdx===rowIdx
+    );
+    if(lead){lead.done=true;lead.col_e='ENVIADO';lead.col_f=dateStr;}
   }
 
-  // Marca que há mudanças não salvas
-  _xlsxModified=true;
+  // ── 2. Atualiza o arquivo xlsx em memória (requer importWB e XLSX) ──
+  if(importWB&&typeof XLSX!=='undefined'){
+    const wsName=sheetName||importWB.SheetNames[0];
+    const ws=importWB.Sheets[wsName];
+    if(ws){
+      const colE=4,colF=5;
+      const verde='C6EFCE';
+      ws[XLSX.utils.encode_cell({r:rowIdx,c:colE})]={
+        v:'ENVIADO',t:'s',
+        s:{fill:{patternType:'solid',fgColor:{rgb:verde}},font:{color:{rgb:'276221'},bold:true}}
+      };
+      ws[XLSX.utils.encode_cell({r:rowIdx,c:colF})]={v:dateStr,t:'s'};
+      const ref=ws['!ref']?XLSX.utils.decode_range(ws['!ref']):{s:{r:0,c:0},e:{r:0,c:0}};
+      if(rowIdx>ref.e.r)ref.e.r=rowIdx;
+      if(colF>ref.e.c)ref.e.c=colF;
+      ws['!ref']=XLSX.utils.encode_range(ref);
+    }
+  }
 
-  // Ativa botão de download
+  // ── 3. Ativa botão de download ──
+  _xlsxModified=true;
   const dlBtn=$id('btnDownloadXlsx');
   if(dlBtn){
     dlBtn.disabled=false;
@@ -2914,16 +2908,15 @@ function markXlsxRowSent(sheetName, rowIdx){
     dlBtn.style.color='#fff';
     dlBtn.style.borderColor='var(--green)';
     dlBtn.style.cursor='pointer';
-    dlBtn.innerHTML='⬇️ Baixar planilha atualizada <span style="font-size:.65rem;background:rgba(255,255,255,.3);padding:2px 6px;border-radius:99px;" id="dlCount">1</span>';
+    const n=_parsedLeads.filter(l=>l.done).length;
+    dlBtn.innerHTML='⬇️ Baixar planilha atualizada <span style="font-size:.65rem;background:rgba(255,255,255,.3);padding:2px 6px;border-radius:99px;">'+n+'</span>';
   }
 
-  // Atualiza contador de enviados no botão
-  const dlCount=$id('dlCount');
-  if(dlCount){
-    const n=_parsedLeads.filter(l=>l.done&&l.col_e==='ENVIADO').length;
-    dlCount.textContent=n;
+  // ── 4. Re-renderiza tabela de leads ──
+  if(_lvMode==='local'&&_parsedLeads.length>0){
+    setTimeout(()=>renderLocalLeadsTable(),200);
   }
-} // fim markXlsxRowSent
+}
 
 // ═══ AVISO DE SAÍDA SEM SALVAR ═══════════════════════════
 let _xlsxModified=false;
