@@ -823,9 +823,14 @@ body,input,select,textarea,.card,.modal,.ci,.crm-card,.stat-box,.fu-card,.tpl-ca
             <span id="lvPageInfo" style="font-size:.76rem;color:var(--taupe);padding:6px 8px;"></span>
             <button class="btn btn-ghost" style="font-size:.74rem;" onclick="lvNextPage()" id="lvBtnNext">Próxima →</button>
           </div>
-          <button class="btn btn-taupe" style="min-height:42px;" onclick="lvSendToDisp()">
-            🚀 Enviar <span id="lvSelCount">0</span> ao Disparador
-          </button>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-taupe" style="min-height:42px;" onclick="lvSendToDisp()">
+              🚀 Enviar <span id="lvSelCount">0</span> ao Disparador
+            </button>
+            <button id="btnDownloadXlsx" onclick="downloadUpdatedXlsx()" style="display:none;min-height:42px;background:var(--green);color:#fff;border:none;border-radius:10px;padding:8px 14px;font-size:.8rem;cursor:pointer;font-weight:700;">
+              ⬇️ Baixar planilha atualizada
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -2357,12 +2362,26 @@ function renderLocalLeadsTable(){
   if(pb)pb.disabled=lvPage===0;
   if(nb)nb.disabled=to>=total;
 
-  // Estado tabs
+  // Estado tabs com contador pendentes/total
   const estados=[...new Set(_parsedLeads.map(l=>l.sheet_name||l.estado).filter(Boolean))].sort();
   const tabEl=$id('lvEstadoTabs');
-  if(tabEl)tabEl.innerHTML=['<button class="fb'+(lvEstado===''?' active':'')+'" onclick="lvSetEstado(\'\')">📍 Todos</button>']
-    .concat(estados.map(e=>'<button class="fb'+(lvEstado===e?' active':'')+'" onclick="lvSetEstado(\''+e+'\')">'+e+'</button>'))
-    .join('');
+  if(tabEl){
+    const mkTab=(label,filter)=>{
+      const leads=filter?_parsedLeads.filter(filter):_parsedLeads;
+      const pend=leads.filter(l=>!l.done).length;
+      const tot=leads.length;
+      const active=filter?lvEstado===label:lvEstado==='';
+      return'<button onclick="lvSetEstado(\''+label+'\')" style="padding:7px 12px;border-radius:8px;'
+        +'font-size:.78rem;font-weight:700;cursor:pointer;white-space:nowrap;'
+        +'border:2px solid '+(active?'var(--taupe)':'var(--gray)')+';'
+        +'background:'+(active?'var(--taupe)':'var(--white)')+';'
+        +'color:'+(active?'#fff':'var(--black)')+';">'
+        +label+' <span style="font-size:.65rem;opacity:.75;">('+pend+'/'+tot+')</span></button>';
+    };
+    const allBtn=mkTab('📍 Todos',null).replace("lvSetEstado(\'📍 Todos\')",'lvSetEstado(\'\')');
+    const stateBtns=estados.map(e=>mkTab(e,l=>l.sheet_name===e||l.estado===e));
+    tabEl.innerHTML=[allBtn,...stateBtns].join('');
+  }
 
   // Tags
   const allTags=[...new Set(_parsedLeads.map(l=>l.tags).filter(Boolean))].sort();
@@ -2447,9 +2466,16 @@ function renderEstadoTabs(){
 }
 
 function lvSetEstado(est){
-  lvEstado=est;lvPage=0;lvSelected.clear();
-  renderEstadoTabs();
-  loadLeadsPage();
+  lvEstado=est;
+  lvPage=0;
+  lvSelected.clear();
+  setTxt('lvSelCount',0);
+  if(_lvMode==='local'){
+    renderLocalLeadsTable();
+  }else{
+    renderEstadoTabs();
+    loadLeadsPage();
+  }
 }
 
 // ── Carrega página de leads ───────────────────────────────
@@ -2577,6 +2603,8 @@ async function lvSendToDisp(){
       c.tags=lead.tags||'';
       c.sheet_name=lead.sheet_name||'';
       c.categoria=lead.categoria||'';
+      c.xlsxSheetName=lead.sheet_name||'';   // ← para marcar na planilha depois
+      c.xlsxRowIdx=lead.rowIdx||null;         // ← linha exata no xlsx
       contacts.push(c);added++;
     });
   }else{
@@ -2758,6 +2786,7 @@ function _doParseAsync(arrBuf){
         col_e:colE,
         col_f:gV(5),
         sheet_name:shName,
+        rowIdx:R,            // ← índice da linha no xlsx para marcar depois
         source:'planilha',
         categoria:'',
         status:'pendente',
@@ -2815,7 +2844,46 @@ async function uploadLeadsToSb(leads,estadosList){
   },1500);
 }
 
-function markXlsxRowSent(sheetName,rowIdx){} // compatibilidade (não usado com Supabase)
+function markXlsxRowSent(sheetName, rowIdx){
+  if(!importWB||rowIdx==null)return;
+
+  // Encontra a aba certa
+  const wsName=sheetName||importWB.SheetNames[0];
+  const ws=importWB.Sheets[wsName];
+  if(!ws)return;
+
+  const colE=4, colF=5;
+  const now=new Date();
+  const dateStr=now.toLocaleDateString('pt-BR')+' '+now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+  const verde='C6EFCE'; // RGB(198,239,206) — mesmo verde do VBA
+
+  // Coluna E = "ENVIADO" com fundo verde
+  const cellE=XLSX.utils.encode_cell({r:rowIdx,c:colE});
+  ws[cellE]={v:'ENVIADO',t:'s',s:{fill:{patternType:'solid',fgColor:{rgb:verde}},font:{color:{rgb:'276221'},bold:true}}};
+
+  // Coluna F = data/hora
+  const cellF=XLSX.utils.encode_cell({r:rowIdx,c:colF});
+  ws[cellF]={v:dateStr,t:'s'};
+
+  // Atualiza range
+  const ref=ws['!ref']?XLSX.utils.decode_range(ws['!ref']):{s:{r:0,c:0},e:{r:0,c:0}};
+  if(rowIdx>ref.e.r)ref.e.r=rowIdx;
+  if(colF>ref.e.c)ref.e.c=colF;
+  ws['!ref']=XLSX.utils.encode_range(ref);
+
+  // Atualiza na memória local
+  const lead=_parsedLeads.find(l=>l.sheet_name===wsName&&l.rowIdx===rowIdx);
+  if(lead){lead.done=true;lead.col_e='ENVIADO';lead.col_f=dateStr;}
+
+  // Destaca botão de download
+  const dlBtn=$id('btnDownloadXlsx');
+  if(dlBtn){
+    dlBtn.style.display='block';
+    dlBtn.style.background='var(--green)';
+    dlBtn.style.color='#fff';
+    dlBtn.textContent='⬇️ Baixar planilha atualizada';
+  }
+}
 
 
 // ═══ WEBHOOKS / CONEXÕES ══════════════════════════════════
