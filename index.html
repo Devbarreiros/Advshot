@@ -415,13 +415,15 @@ body,input,select,textarea,.card,.modal,.ci,.crm-card,.stat-box,.fu-card,.tpl-ca
     </div>
     <!-- User logado -->
     <div id="userMenu" style="display:none;align-items:center;gap:8px;">
-      <div id="userAvatarBtn"
-        style="width:32px;height:32px;border-radius:50%;background:var(--taupe);border:2px solid var(--beige);cursor:pointer;display:flex;align-items:center;justify-content:center;overflow:hidden;background-size:cover;background-position:center;flex-shrink:0;position:relative;"
-        title="Clique para sair" onclick="signOutUser()">
-        <span id="userInitials" style="font-size:.72rem;font-weight:700;color:#fff;font-family:'Libre Baskerville',serif;pointer-events:none;user-select:none;"></span>
+      <div style="position:relative;flex-shrink:0;cursor:pointer;" onclick="signOutUser()" title="Clique para sair">
+        <div id="userAvatarBtn" style="width:32px;height:32px;border-radius:50%;background:var(--taupe);border:2px solid var(--beige);overflow:hidden;display:flex;align-items:center;justify-content:center;">
+          <img id="userAvatarImg" src="" width="32" height="32" referrerpolicy="no-referrer" crossorigin="anonymous"
+            style="width:100%;height:100%;object-fit:cover;display:none;border-radius:50%;" alt="">
+          <span id="userInitials" style="font-size:.72rem;font-weight:700;color:#fff;font-family:'Libre Baskerville',serif;"></span>
+        </div>
         <div style="position:absolute;bottom:-1px;right:-1px;width:10px;height:10px;background:#4ade80;border-radius:50%;border:1.5px solid #20211F;"></div>
       </div>
-      <span id="userName" style="font-size:.75rem;color:rgba(255,255,255,.9);max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;cursor:pointer;" onclick="openLoginModal()"></span>
+      <span id="userName" style="font-size:.75rem;color:rgba(255,255,255,.9);max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;"></span>
     </div>
   </div>
 </nav>
@@ -429,8 +431,10 @@ body,input,select,textarea,.card,.modal,.ci,.crm-card,.stat-box,.fu-card,.tpl-ca
 <!-- HOME -->
 <div class="page active" id="page-home">
   <div id="welcomeCard" style="display:none;background:linear-gradient(135deg,var(--taupe),var(--black));border-radius:14px;padding:16px 20px;margin-bottom:14px;align-items:center;gap:14px;">
-    <div id="welcomeAvatar" style="width:52px;height:52px;border-radius:50%;border:3px solid var(--beige);flex-shrink:0;background:rgba(255,255,255,.15);background-size:cover;background-position:center;display:flex;align-items:center;justify-content:center;">
-      <div id="welcomeInitials" style="font-size:1.1rem;font-weight:700;color:#fff;font-family:'Libre Baskerville',serif;"></div>
+    <div style="width:52px;height:52px;border-radius:50%;border:3px solid var(--beige);flex-shrink:0;overflow:hidden;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;">
+      <img id="welcomeAvatarImg" src="" width="52" height="52" referrerpolicy="no-referrer" crossorigin="anonymous"
+        style="width:100%;height:100%;object-fit:cover;display:none;" alt="">
+      <div id="welcomeInitials" style="font-size:1.2rem;font-weight:700;color:#fff;font-family:'Libre Baskerville',serif;"></div>
     </div>
     <div style="flex:1;min-width:0;">
       <div style="font-family:'Libre Baskerville',serif;font-size:1rem;font-weight:700;color:#fff;" id="welcomeName">Olá!</div>
@@ -1107,30 +1111,41 @@ function updateAuthUI(){
     const firstName=fullName.split(' ')[0];
     const initials=fullName.split(' ').filter(Boolean).map(n=>n[0]).slice(0,2).join('').toUpperCase();
 
-    // Avatar circular — usa background-image (mais confiável que <img> para URLs externas)
-    const avatarBtn=$id('userAvatarBtn');
+    // Avatar — usa <img> com referrerpolicy (obrigatório para URLs do Google)
+    const avatarImg=$id('userAvatarImg');
     const ini=$id('userInitials');
-    if(avatarBtn){
+    if(avatarImg&&ini){
       if(avatar){
-        avatarBtn.style.backgroundImage='url('+avatar+')';
-        if(ini)ini.style.display='none';
+        avatarImg.src=avatar;
+        avatarImg.style.display='block';
+        ini.style.display='none';
+        // Fallback: se a imagem não carregar, mostra iniciais
+        avatarImg.onerror=function(){
+          this.style.display='none';
+          ini.style.display='block';
+          ini.textContent=initials;
+        };
       }else{
-        avatarBtn.style.backgroundImage='none';
-        if(ini){ini.textContent=initials;ini.style.display='block';}
+        avatarImg.style.display='none';
+        ini.style.display='block';
+        ini.textContent=initials;
       }
     }
     const nm=$id('userName');
     if(nm)nm.textContent=firstName;
 
-    // Welcome card na Home
     const wc=$id('welcomeCard');
     if(wc){
       wc.style.display='flex';
-      const wa=$id('welcomeAvatar');
+      const wa=$id('welcomeAvatarImg');
       const wi=$id('welcomeInitials');
       if(wa&&wi){
-        if(avatar){wa.style.backgroundImage='url('+avatar+')';wa.style.backgroundSize='cover';wa.style.backgroundPosition='center';wi.style.display='none';}
-        else{wa.style.display='none';wi.textContent=initials;wi.style.display='flex';}
+        if(avatar){
+          wa.src=avatar;wa.style.display='block';wi.style.display='none';
+          wa.onerror=function(){this.style.display='none';wi.style.display='block';wi.textContent=initials;};
+        }else{
+          wa.style.display='none';wi.style.display='block';wi.textContent=initials;
+        }
       }
       const wn=$id('welcomeName');if(wn)wn.textContent='Olá, '+firstName+'!';
       const we=$id('welcomeEmail');if(we)we.textContent=currentUser.email||'';
@@ -2306,11 +2321,87 @@ function renderAll(){renderHome();renderDailyCounter();if(contacts.length){setDi
 const LV_COLS={name:0,phone:1,tags:2,estado:3,sent:4,sentDate:5};
 const LV_PAGE_SIZE=100;
 let lvPage=0, lvTotal=0, lvEstado='', lvEstados=[];
-let lvSelected=new Set(); // Set of contact ids
+let lvSelected=new Set();
 let lvSearchTimer=null;
 let importWB=null, importSheets=[];
+let _lvMode='supabase'; // 'local' ou 'supabase'
+let _lvLocalFiltered=[];
 
-// ── Inicializa o viewer quando entra na aba ───────────────
+// ── Modo local — mostra _parsedLeads sem Supabase ─────────
+function renderLocalLeadsTable(){
+  _lvMode='local';
+  const search=($id('lvSearch')?.value||'').toLowerCase();
+  const tag=$id('lvTagSel')?.value||'';
+  const cat=$id('lvCategoriaSel')?.value||'';
+  const statusF=$id('lvStatusSel')?.value||'all';
+  const estat=lvEstado;
+
+  let list=_parsedLeads;
+  if(estat)list=list.filter(l=>l.sheet_name===estat||l.estado===estat);
+  if(search)list=list.filter(l=>(l.nome||'').toLowerCase().includes(search)||(l.tags||'').toLowerCase().includes(search));
+  if(tag)list=list.filter(l=>l.tags===tag);
+  if(cat)list=list.filter(l=>l.categoria===cat);
+  if(statusF==='pending')list=list.filter(l=>!l.done);
+  if(statusF==='sent')list=list.filter(l=>l.done);
+
+  // Paginação
+  const total=list.length;
+  const from=lvPage*LV_PAGE_SIZE, to=from+LV_PAGE_SIZE;
+  const page=list.slice(from,to);
+  _lvLocalFiltered=list;
+
+  setTxt('lvTotalCount',total.toLocaleString('pt-BR')+' leads');
+  setTxt('lvCount',total+' leads · '+lvSelected.size+' selecionados');
+  setTxt('lvPageInfo',(from+1)+'-'+Math.min(to,total)+' de '+total);
+  const pb=$id('lvBtnPrev'),nb=$id('lvBtnNext');
+  if(pb)pb.disabled=lvPage===0;
+  if(nb)nb.disabled=to>=total;
+
+  // Estado tabs
+  const estados=[...new Set(_parsedLeads.map(l=>l.sheet_name||l.estado).filter(Boolean))].sort();
+  const tabEl=$id('lvEstadoTabs');
+  if(tabEl)tabEl.innerHTML=['<button class="fb'+(lvEstado===''?' active':'')+'" onclick="lvSetEstado(\'\')">📍 Todos</button>']
+    .concat(estados.map(e=>'<button class="fb'+(lvEstado===e?' active':'')+'" onclick="lvSetEstado(\''+e+'\')">'+e+'</button>'))
+    .join('');
+
+  // Tags
+  const allTags=[...new Set(_parsedLeads.map(l=>l.tags).filter(Boolean))].sort();
+  const ts=$id('lvTagSel');
+  if(ts){const cur=ts.value;ts.innerHTML='<option value="">Todas as tags</option>'+allTags.map(t=>'<option value="'+esc(t)+'"'+(t===cur?' selected':'')+'>'+esc(t)+'</option>').join('');}
+
+  const tbody=$id('lvTableBody');
+  if(!tbody)return;
+  if(!page.length){tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:24px;color:#aaa;">Nenhum lead encontrado</td></tr>';return;}
+
+  tbody.innerHTML=page.map(l=>{
+    const key='local_'+l.phone;
+    const sel=lvSelected.has(key);
+    const sent=l.done;
+    // ENVIADO é clicável — só fica levemente transparente com badge verde
+    return'<tr class="'+(sel?'sel':'')+'" onclick="lvToggleLocal(\''+esc(l.phone)+'\')" style="cursor:pointer;'+(sent?'opacity:.75;':'')+'">'
+      +'<td><div class="import-chk '+(sel?'on':'')+'" id="lvc-'+esc(l.phone)+'">'+(sel?'✓':'')+'</div></td>'
+      +'<td style="font-weight:600;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(cleanNome(l.nome))+'</td>'
+      +'<td style="font-family:monospace;font-size:.72rem;">'+l.phone+'</td>'
+      +'<td style="max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.74rem;color:var(--taupe);">'+esc(l.tags||'—')+'</td>'
+      +'<td><span class="estado-badge">'+esc(l.estado||l.sheet_name||'?')+'</span></td>'
+      +'<td style="font-size:.7rem;color:var(--taupe);">'+esc(l.categoria||'—')+'</td>'
+      +'<td>'+(sent?'<span class="sent-tag">✅ Enviado</span>':'<span style="font-size:.7rem;color:#aaa;">Pendente</span>')+'</td>'
+      +'</tr>';
+  }).join('');
+}
+
+function lvToggleLocal(phone){
+  const key='local_'+phone;
+  if(lvSelected.has(key))lvSelected.delete(key);
+  else lvSelected.add(key);
+  const chk=$id('lvc-'+phone);
+  if(chk){chk.classList.toggle('on',lvSelected.has(key));chk.textContent=lvSelected.has(key)?'✓':'';}
+  const tr=chk?.closest('tr');if(tr)tr.className=lvSelected.has(key)?'sel':'';
+  setTxt('lvSelCount',lvSelected.size);
+  setTxt('lvCount',(_lvLocalFiltered.length||_parsedLeads.length)+' leads · '+lvSelected.size+' selecionados');
+}
+
+
 async function initLeadsViewer(){
   if(!sbClient){
     setDisplay('importUploadCard','block');
@@ -2415,8 +2506,8 @@ async function loadLeadsPage(){
   if(tbody)tbody.innerHTML=(data||[]).map(c=>{
     const sel=lvSelected.has(c.id);
     const sent=c.done||/(enviado)/i.test(c.col_e||'');
-    return'<tr class="'+(sent?'sent':sel?'sel':'')+'" '+(sent?'':'onclick="lvToggle(\''+c.id+'\')" style="cursor:pointer;"')+'>'
-      +'<td><div class="import-chk '+(sel&&!sent?'on':'')+'" id="lvc-'+c.id+'">'+(sel&&!sent?'✓':'')+'</div></td>'
+    return'<tr class="'+(sel?'sel':'')+'" onclick="lvToggle(\''+c.id+'\')" style="cursor:pointer;'+(sent?'opacity:.75;':'')+'">'
+      +'<td><div class="import-chk '+(sel?'on':'')+'" id="lvc-'+c.id+'">'+(sel?'✓':'')+'</div></td>'
       +'<td style="font-weight:600;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(cleanNome(c.nome))+'</td>'
       +'<td style="font-family:monospace;font-size:.72rem;">'+c.phone+'</td>'
       +'<td style="max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.74rem;color:var(--taupe);">'+esc(c.tags||'—')+'</td>'
@@ -2439,14 +2530,21 @@ function lvToggle(id){
   setTxt('lvCount',lvTotal+' leads · '+lvSelected.size+' selecionados');
 }
 function lvSelectAllPage(){
-  document.querySelectorAll('#lvTableBody tr:not(.sent)').forEach(tr=>{
-    const chk=tr.querySelector('.import-chk');
-    if(!chk)return;
-    const id=chk.id.replace('lvc-','');
-    lvSelected.add(id);chk.classList.add('on');chk.textContent='✓';tr.className='sel';
-  });
+  if(_lvMode==='local'){
+    document.querySelectorAll('#lvTableBody tr:not(.sent)').forEach(tr=>{
+      const chk=tr.querySelector('.import-chk');if(!chk)return;
+      const phone=chk.id.replace('lvc-','');
+      const key='local_'+phone;
+      lvSelected.add(key);chk.classList.add('on');chk.textContent='✓';tr.className='sel';
+    });
+  }else{
+    document.querySelectorAll('#lvTableBody tr:not(.sent)').forEach(tr=>{
+      const chk=tr.querySelector('.import-chk');if(!chk)return;
+      const id=chk.id.replace('lvc-','');
+      lvSelected.add(id);chk.classList.add('on');chk.textContent='✓';tr.className='sel';
+    });
+  }
   setTxt('lvSelCount',lvSelected.size);
-  setTxt('lvCount',lvTotal+' leads · '+lvSelected.size+' selecionados');
 }
 function lvClearSel(){
   lvSelected.clear();
@@ -2454,51 +2552,51 @@ function lvClearSel(){
     chk.classList.remove('on');chk.textContent='';chk.closest('tr').className='';
   });
   setTxt('lvSelCount',0);
-  setTxt('lvCount',lvTotal+' leads · 0 selecionados');
 }
 
-// ── Envia selecionados ao Disparador ─────────────────────
+
+
+
 async function lvSendToDisp(){
   if(!lvSelected.size){toast('⚠️ Selecione pelo menos um lead.');return;}
-  if(!sbClient){toast('❌ Sem conexão com Supabase.');return;}
-  // Busca os dados dos leads selecionados
-  const ids=[...lvSelected];
-  const{data,error}=await sbClient.from('contacts').select('*').in('id',ids);
-  if(error||!data?.length){toast('❌ Erro ao buscar leads.');return;}
   const campId=$id('dispCamp')?.value||'default';
   const existingPhones=new Set(contacts.map(c=>c.phone.replace(/\D/g,'')));
   let added=0,dupes=0;
-  data.forEach(row=>{
-    const p=row.phone.replace(/\D/g,'');
-    if(existingPhones.has(p)){dupes++;return;}
-    existingPhones.add(p);
-    const c=rowToContact(row);
-    c.campaign=campId;
-    c.varIdx=added;
-    contacts.push(c);
-    added++;
-  });
-  saveStorage();
-  setDisplay('listSection','block');
-  renderDisp();renderHome();
+
+  if(_lvMode==='local'){
+    lvSelected.forEach(key=>{
+      const phone=key.replace('local_','');
+      const lead=_parsedLeads.find(l=>l.phone===phone);
+      if(!lead)return;
+      const p=lead.phone.replace(/\D/g,'');
+      if(existingPhones.has(p)){dupes++;return;}
+      existingPhones.add(p);
+      const c=mkC(p,lead.nome||p,added,campId);
+      c.estado=lead.estado||lead.sheet_name||getEstado(p);
+      c.service=lead.tags||'—';
+      c.tags=lead.tags||'';
+      c.sheet_name=lead.sheet_name||'';
+      c.categoria=lead.categoria||'';
+      contacts.push(c);added++;
+    });
+  }else{
+    if(!sbClient){toast('❌ Sem conexão com Supabase.');return;}
+    const ids=[...lvSelected];
+    const{data,error}=await sbClient.from('contacts').select('*').in('id',ids);
+    if(error||!data?.length){toast('❌ Erro ao buscar leads.');return;}
+    data.forEach(row=>{
+      const p=row.phone.replace(/\D/g,'');
+      if(existingPhones.has(p)){dupes++;return;}
+      existingPhones.add(p);
+      const c=rowToContact(row);c.campaign=campId;c.varIdx=added;
+      contacts.push(c);added++;
+    });
+  }
+
+  saveStorage();setDisplay('listSection','block');renderDisp();renderHome();
   goTo('disp');
   toast('✅ '+added+' leads no Disparador!'+(dupes?' · '+dupes+' já existiam':''));
-  lvSelected.clear();
-  setTxt('lvSelCount',0);
-}
-
-// ── Marca como enviado no Supabase ───────────────────────
-async function markLeadSentInSupabase(contactId){
-  if(!sbClient||!contactId)return;
-  const now=new Date();
-  const dateStr=now.toLocaleDateString('pt-BR')+' '+now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
-  await sbClient.from('contacts').update({
-    col_e:'ENVIADO',
-    col_f:dateStr,
-    done:true,
-    sent_at:now.toLocaleString('pt-BR'),
-    sent_hour:now.getHours()
-  }).eq('id',contactId);
+  lvSelected.clear();setTxt('lvSelCount',0);
 }
 
 async function refreshLeadsViewer(){await loadEstadoTabs();await loadLeadsPage();}
@@ -2515,9 +2613,11 @@ function ensureXLSX(cb){
 function handleXlsxFile(file){
   if(!file)return;
   const uz=$id('uploadZone');
-  if(uz)uz.innerHTML='<div class="fi">⏳</div><h4>Lendo planilha...</h4><p>'+esc(file.name)+'</p>';
-  ensureXLSX(()=>_parseAndUpload(file));
+  if(uz)uz.innerHTML='<div class="fi">⏳</div><h4>Lendo planilha...</h4><p style="color:var(--taupe);">'+esc(file.name)+'</p><p style="font-size:.72rem;color:#aaa;margin-top:4px;">Aguarde — arquivos grandes podem levar alguns segundos</p>';
+  // setTimeout garante que "Lendo planilha..." aparece ANTES de bloquear a thread com o XLSX
+  setTimeout(()=>ensureXLSX(()=>_parseAndUpload(file)), 80);
 }
+
 
 let _parsedLeads=[], _parsedEstados=[];
 
@@ -2527,77 +2627,157 @@ function cancelUpload(){
   setDisplay('uploadStep2','none');
   setDisplay('uploadProgressWrap','none');
   const uz=$id('uploadZone');
-  if(uz)uz.innerHTML='<div class="fi">📊</div><h4>Suba sua planilha aqui</h4><p>Estrutura: A=Nome · B=WhatsApp · C=Tags · D=Estado · E=Enviado · F=Data</p><p style="margin-top:6px;font-size:.72rem;color:#aaa;">Upload único — depois acesse sempre pelo site sem precisar subir de novo</p>';
+  if(uz){uz.innerHTML='<div class="fi">📊</div><h4>Suba sua planilha aqui</h4><p>Estrutura: A=Nome · B=WhatsApp · C=Tags · D=Estado · E=Enviado · F=Data</p>';}
   const inp=$id('xlsxInput');if(inp)inp.value='';
 }
 
-async function startUpload(categoria){
+async function startUpload(cat){
+  const categoria=cat||'Geral';
   if(!_parsedLeads.length){toast('⚠️ Nenhum lead para enviar.');return;}
-  // Aplica categoria nos leads
   _parsedLeads.forEach(l=>l.categoria=categoria);
+
+  // 1. Mostra a tabela LOCAL imediatamente — não espera Supabase
   setDisplay('uploadStep2','none');
-  setDisplay('uploadProgressWrap','block');
-  await uploadLeadsToSb(_parsedLeads,_parsedEstados);
+  setDisplay('importUploadCard','none');
+  setDisplay('leadsViewerCard','block');
+  _lvMode='local'; // modo local: usa _parsedLeads direto
+  renderLocalLeadsTable();
+
+  // 2. Sobe para Supabase em background (não bloqueia o usuário)
+  if(sbClient){
+    setTimeout(async()=>{
+      const total=_parsedLeads.length;
+      toast('🔄 Salvando '+total.toLocaleString('pt-BR')+' leads no Supabase em background...',3000);
+      await uploadLeadsToSb([..._parsedLeads],_parsedEstados);
+    },500);
+  }
+}
+
+function _showUploadError(msg){
+  const step1=$id('uploadStep1');
+  if(step1)step1.innerHTML='<div style="background:#fdf2f2;border:2px solid var(--red);border-radius:10px;padding:16px;text-align:center;">'
+    +'<div style="font-size:1.4rem;margin-bottom:8px;">❌</div>'
+    +'<div style="font-weight:700;color:var(--red);margin-bottom:6px;">Erro ao ler planilha</div>'
+    +'<div style="font-size:.76rem;color:var(--black);margin-bottom:12px;">'+esc(msg)+'</div>'
+    +'<button onclick="cancelUpload()" class="btn btn-ghost">🔄 Tentar novamente</button>'
+    +'</div>';
+  setDisplay('uploadStep2','none');
+  setDisplay('uploadProgressWrap','none');
 }
 
 function _parseAndUpload(file){
+  if(typeof XLSX==='undefined'){
+    _showUploadError('Biblioteca Excel não carregada. Verifique sua conexão.');
+    return;
+  }
   const reader=new FileReader();
   reader.onload=function(e){
-    try{
-      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
-      importWB=wb;
-      _parsedLeads=[];
-      _parsedEstados=[];
+    const arrBuf=e.target.result;
+    _doParseAsync(arrBuf);
+  };
+  reader.onerror=()=>_showUploadError('Erro ao ler o arquivo do disco.');
+  reader.readAsArrayBuffer(file);
+}
 
-      wb.SheetNames.forEach(shName=>{
-        const ws=wb.Sheets[shName];
-        if(!ws)return;
-        const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
-        if(rows.length<2)return;
-        _parsedEstados.push(shName);
-        rows.slice(1).forEach((row)=>{
-          const phone=String(row[LV_COLS.phone]||'').replace(/\D/g,'');
-          if(!phone||phone.length<8)return;
-          const nome=String(row[LV_COLS.name]||'').trim()||phone;
-          const tags=String(row[LV_COLS.tags]||'').trim();
-          const estadoCell=String(row[LV_COLS.estado]||'').trim()||shName;
-          const colEVal=String(row[LV_COLS.sent]||'').trim();
-          const colFVal=String(row[LV_COLS.sentDate]||'').trim();
-          const alreadySent=/(enviado|sent)/i.test(colEVal)&&colEVal.length>0;
-          _parsedLeads.push({
-            id:genId(), phone, nome,
-            estado:estadoCell||shName,
-            tags, sheet_name:shName,
-            col_e:colEVal, col_f:colFVal,
-            source:'planilha', categoria:'',
-            status:'pendente', done:alreadySent,
-            service:tags||'—',
-            fu_level:0, fu_msg_idx:{1:-1,2:-1,3:-1},
-            history:[], var_idx:0
-          });
-        });
-      });
+function _doParseAsync(arrBuf){
+  const uz=$id('uploadZone');
+  let wb;
+  try{
+    // Opções mínimas = muito mais rápido para arquivos grandes
+    wb=XLSX.read(new Uint8Array(arrBuf),{
+      type:'array',
+      cellDates:false,
+      cellNF:false,
+      cellStyles:false
+    });
+    importWB=wb;
+  }catch(err){
+    _showUploadError('Erro ao abrir o arquivo: '+err.message+'. Verifique se é um .xlsx válido.');
+    return;
+  }
 
+  _parsedLeads=[];
+  _parsedEstados=[];
+  const sheets=wb.SheetNames.filter(n=>wb.Sheets[n]);
+  let shIdx=0;
+
+  function processNextSheet(){
+    if(shIdx>=sheets.length){
+      // Tudo processado
       if(!_parsedLeads.length){
-        toast('⚠️ Nenhum lead encontrado. Verifique se a coluna B tem os telefones.',4000);
-        cancelUpload();
+        _showUploadError('Nenhum lead encontrado. Verifique se a coluna B (WhatsApp) tem os números.');
         return;
       }
-
-      // Mostra etapa 2 — escolha de categoria
+      // Mostra etapa de categoria
       setDisplay('uploadStep1','none');
       setDisplay('uploadStep2','block');
       const info=$id('uploadStep2Info');
-      if(info)info.textContent=_parsedLeads.length.toLocaleString('pt-BR')+' leads lidos de '+_parsedEstados.length+' aba(s)';
-
-    }catch(err){
-      console.error('XLSX error:',err);
-      toast('❌ Erro ao ler: '+err.message,4000);
-      cancelUpload();
+      if(info)info.textContent=
+        _parsedLeads.length.toLocaleString('pt-BR')+' leads de '+_parsedEstados.length+' abas';
+      return;
     }
-  };
-  reader.onerror=()=>{toast('❌ Erro ao ler o arquivo.');cancelUpload();};
-  reader.readAsArrayBuffer(file);
+
+    const shName=sheets[shIdx];
+    const ws=wb.Sheets[shName];
+    const ref=ws['!ref'];
+    if(!ref){shIdx++;setTimeout(processNextSheet,0);return;}
+
+    // Progresso no UI
+    if(uz){
+      const h=uz.querySelector('h4');
+      if(h)h.textContent='Processando '+shName+'... ('+shIdx+'/'+sheets.length+')';
+    }
+
+    const range=XLSX.utils.decode_range(ref);
+    let addedInSheet=0;
+
+    // Acessa células diretamente — muito mais rápido que sheet_to_json
+    for(let R=range.s.r+1;R<=range.e.r;R++){
+      const phoneCell=ws[XLSX.utils.encode_cell({r:R,c:1})]; // col B
+      if(!phoneCell)continue;
+      const phone=String(phoneCell.v||'').replace(/\D/g,'');
+      if(!phone||phone.length<8)continue;
+      // Deduplicação — pula se já processamos este telefone
+      if(_seenPhones.has(phone))continue;
+      _seenPhones.add(phone);
+
+      const gV=(col)=>{
+        const cell=ws[XLSX.utils.encode_cell({r:R,c:col})];
+        return cell?String(cell.v||'').trim():'';
+      };
+
+      const colE=gV(4);
+      const alreadySent=colE.length>0&&/(enviado|sent)/i.test(colE);
+
+      _parsedLeads.push({
+        id:genId(),
+        phone,
+        nome:gV(0)||phone,
+        tags:gV(2),
+        estado:gV(3)||shName,
+        col_e:colE,
+        col_f:gV(5),
+        sheet_name:shName,
+        source:'planilha',
+        categoria:'',
+        status:'pendente',
+        done:alreadySent,
+        service:gV(2)||'—',
+        fu_level:0,fu_msg_idx:{1:-1,2:-1,3:-1},history:[],var_idx:0
+      });
+      addedInSheet++;
+    }
+
+    if(addedInSheet>0)_parsedEstados.push(shName);
+    shIdx++;
+
+    // requestAnimationFrame: dá chance ao browser de respirar entre abas
+    requestAnimationFrame(()=>setTimeout(processNextSheet,0));
+  }
+
+  // Inicia o processamento progressivo
+  const _seenPhones=new Set(); // deduplicação por telefone
+  setTimeout(processNextSheet,50);
 }
 
 async function uploadLeadsToSb(leads,estadosList){
@@ -2638,7 +2818,150 @@ async function uploadLeadsToSb(leads,estadosList){
 function markXlsxRowSent(sheetName,rowIdx){} // compatibilidade (não usado com Supabase)
 
 
-// ═══ STORAGE ══════════════════════════════════════════════
+// ═══ WEBHOOKS / CONEXÕES ══════════════════════════════════
+function renderWebhooks(){
+  const el=$id('webhookList');if(!el)return;
+  if(!webhooks.length){el.innerHTML='<p style="font-size:.76rem;color:#aaa;padding:8px 0;">Nenhuma conexão ainda.</p>';return;}
+  el.innerHTML=webhooks.map((w,i)=>
+    '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--gray);border-radius:8px;margin-bottom:6px;">'
+    +'<div style="flex:1;min-width:0;"><div style="font-weight:700;font-size:.8rem;color:var(--black);">'+esc(w.name)+'</div>'
+    +'<div style="font-size:.7rem;color:var(--taupe);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(w.url)+'</div></div>'
+    +'<button onclick="sendToWebhook('+i+')" class="btn btn-green" style="font-size:.72rem;padding:5px 10px;flex-shrink:0;">📤 Enviar</button>'
+    +'<button onclick="removeWebhook('+i+')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:.9rem;flex-shrink:0;">✕</button>'
+    +'</div>'
+  ).join('');
+}
+
+function addWebhook(){
+  const name=($id('whName')?.value||'').trim();
+  const url=($id('whUrl')?.value||'').trim();
+  if(!name||!url){toast('⚠️ Preencha o nome e a URL.');return;}
+  if(!url.startsWith('http')){toast('⚠️ URL inválida.');return;}
+  webhooks.push({id:'w'+Date.now(),name,url});
+  saveStorage();
+  const ni=$id('whName'),ui=$id('whUrl');
+  if(ni)ni.value='';if(ui)ui.value='';
+  renderWebhooks();
+  toast('✅ Conexão adicionada!');
+}
+
+function removeWebhook(i){
+  if(!confirm('Remover conexão "'+webhooks[i]?.name+'"?'))return;
+  webhooks.splice(i,1);
+  saveStorage();renderWebhooks();
+  renderPullSelect();
+}
+
+async function sendToWebhook(i){
+  const w=webhooks[i];if(!w)return;
+  if(!contacts.length){toast('⚠️ Nenhum lead para enviar.');return;}
+  const el=$id('syncStatus');
+  if(el)el.textContent='📤 Enviando...';
+  try{
+    const payload=JSON.stringify({leads:contacts.map(c=>({
+      nome:cleanNome(c.nome),telefone:c.phone,estado:c.estado,
+      status:c.status,service:c.service,notes:c.notes,
+      lastContact:c.lastContact,nextContact:c.nextContact
+    }))});
+    const r=await fetch(w.url,{method:'POST',headers:{'Content-Type':'application/json'},body:payload,mode:'no-cors'});
+    if(el)el.textContent='✅ Enviado para "'+w.name+'" em '+new Date().toLocaleTimeString('pt-BR');
+    toast('✅ Dados enviados para "'+w.name+'"!');
+  }catch(e){
+    if(el)el.textContent='❌ Erro ao enviar: '+e.message;
+    toast('❌ Erro: '+e.message,4000);
+  }
+}
+
+function confirmSync(){
+  const url=($id('sheetsWebhook')?.value||'').trim();
+  if(!url){toast('⚠️ Cole a URL do Apps Script primeiro.');return;}
+  if(!webhooks.find(w=>w.url===url)){
+    webhooks.push({id:'w'+Date.now(),name:'CRM Principal',url});
+    saveStorage();renderWebhooks();renderPullSelect();
+  }
+  sendToWebhookUrl(url);
+}
+
+async function sendToWebhookUrl(url){
+  const el=$id('syncStatus');
+  if(el)el.textContent='📤 Enviando...';
+  try{
+    const payload=JSON.stringify({leads:contacts.map(c=>({
+      nome:cleanNome(c.nome),telefone:c.phone,estado:c.estado,
+      status:c.status,service:c.service,notes:c.notes,
+      lastContact:c.lastContact,nextContact:c.nextContact
+    }))});
+    await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:payload,mode:'no-cors'});
+    if(el)el.textContent='✅ Enviado em '+new Date().toLocaleTimeString('pt-BR');
+    toast('✅ Dados enviados para o Sheets!');
+  }catch(e){
+    if(el)el.textContent='❌ Erro: '+e.message;
+  }
+}
+
+function renderPullSelect(){
+  const el=$id('pullSelect');if(!el)return;
+  el.innerHTML='<option value="">Selecionar planilha...</option>'
+    +webhooks.map((w,i)=>'<option value="'+i+'">'+esc(w.name)+'</option>').join('');
+}
+
+async function pullFromSheet(){
+  const sel=$id('pullSelect');
+  const idx=sel?parseInt(sel.value):-1;
+  if(isNaN(idx)||idx<0||!webhooks[idx]){toast('⚠️ Selecione uma planilha.');return;}
+  const w=webhooks[idx];
+  const st=$id('pullStatus');
+  if(st)st.textContent='🔄 Buscando...';
+  try{
+    const r=await fetch(w.url+'?action=get',{method:'GET'});
+    const d=await r.json();
+    const leads=d.leads||d.contacts||d;
+    if(!Array.isArray(leads)||!leads.length){if(st)st.textContent='⚠️ Nenhum dado retornado.';return;}
+    let added=0;
+    const existingPhones=new Set(contacts.map(c=>c.phone));
+    leads.forEach((row,i)=>{
+      const phone=String(row.telefone||row.phone||row.whatsapp||'').replace(/\D/g,'');
+      if(!phone||existingPhones.has(phone))return;
+      existingPhones.add(phone);
+      contacts.push(mkC(phone,row.nome||phone,i,'default'));
+      added++;
+    });
+    saveStorage();renderAll();
+    if(st)st.textContent='✅ '+added+' leads importados de "'+w.name+'".';
+    toast('✅ '+added+' leads importados!');
+  }catch(e){
+    if(st)st.textContent='❌ Erro: '+e.message;
+    toast('❌ '+e.message,4000);
+  }
+}
+
+function renderLeadsSheetSelect(){
+  const el=$id('leadsSheetSelect');if(!el)return;
+  el.innerHTML='<option value="">Selecionar planilha de leads...</option>'
+    +webhooks.map((w,i)=>'<option value="'+i+'">'+esc(w.name)+'</option>').join('');
+}
+
+async function loadLeadsFromSheet(){
+  const sel=$id('leadsSheetSelect');
+  const idx=sel?parseInt(sel.value):-1;
+  if(isNaN(idx)||idx<0||!webhooks[idx])return;
+  const w=webhooks[idx];
+  const tbl=$id('leadsSheetTable');
+  if(tbl)tbl.innerHTML='<p style="color:var(--taupe);font-size:.76rem;">🔄 Carregando...</p>';
+  try{
+    const r=await fetch(w.url+'?action=getLeads');
+    const d=await r.json();
+    const leads=d.leads||d.contacts||d;
+    if(!Array.isArray(leads)||!leads.length){
+      if(tbl)tbl.innerHTML='<p style="color:#aaa;font-size:.76rem;">Nenhum lead encontrado.</p>';return;
+    }
+    if(tbl)tbl.innerHTML='<p style="font-size:.76rem;color:var(--taupe);">'+leads.length+' leads na planilha.</p>';
+  }catch(e){
+    if(tbl)tbl.innerHTML='<p style="color:var(--red);font-size:.76rem;">❌ Erro: '+e.message+'</p>';
+  }
+}
+
+
 function saveStorage(){
   try{localStorage.setItem('advshot2',JSON.stringify({contacts,campaigns,webhooks}));}catch(e){}
   setTimeout(()=>syncToSupabase(),500);
