@@ -6,7 +6,7 @@
 <title>Adv Shot</title>
 <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:wght@400;700&family=Cormorant+Garamond:wght@300;400;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
 :root{--black:#20211F;--gray:#DBDBDB;--taupe:#716B5B;--beige:#BCAF95;--bg:#F5F3EF;--white:#fff;--red:#c0392b;--green:#16a34a;--orange:#d97706;}
 *{box-sizing:border-box;margin:0;padding:0;}
@@ -392,6 +392,7 @@ body,input,select,textarea,.card,.modal,.ci,.crm-card,.stat-box,.fu-card,.tpl-ca
     <button class="nav-tab" onclick="goTo('import')">📂 Importar</button>
   </div>
   <div style="margin-left:auto;padding-left:8px;flex-shrink:0;display:flex;align-items:center;gap:6px;">
+    <div id="syncDot" title="Status Supabase" style="width:8px;height:8px;border-radius:50%;background:#aaa;flex-shrink:0;transition:background .3s;" ></div>
     <button id="themeToggle" onclick="toggleTheme()" title="Alternar modo escuro/claro"
       style="background:none;border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.7);width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:.9rem;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .2s;"
       onmouseover="this.style.borderColor='var(--beige)'" onmouseout="this.style.borderColor='rgba(255,255,255,.2)'">🌙</button>
@@ -413,6 +414,18 @@ body,input,select,textarea,.card,.modal,.ci,.crm-card,.stat-box,.fu-card,.tpl-ca
 
   <!-- ALERTAS DE RETORNO -->
   <div id="homeAlerts"></div>
+
+  <!-- STATUS SUPABASE -->
+  <div id="sbStatusCard" style="display:none;" class="card" style="margin-bottom:14px;">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div id="sbStatusDot" style="width:10px;height:10px;border-radius:50%;background:#aaa;flex-shrink:0;"></div>
+      <div style="flex:1;">
+        <div style="font-size:.78rem;font-weight:600;color:var(--black);" id="sbStatusTxt">Conectando ao Supabase...</div>
+        <div style="font-size:.7rem;color:var(--taupe);" id="sbStatusSub">Os seus dados serão salvos na nuvem</div>
+      </div>
+      <button class="btn btn-ghost" style="font-size:.72rem;" onclick="syncNow()">🔄 Sincronizar</button>
+    </div>
+  </div>
 
   <div class="feat-grid">
     <div class="feat" onclick="goTo('disp')"><div class="fi">🚀</div><h4>Disparador</h4><p>Timer aleatório e variações</p></div>
@@ -917,6 +930,144 @@ function doPost(e) {
 </div>
 
 <script>
+// ═══ SUPABASE ══════════════════════════════════════════════
+const SB_URL='https://diokuinaoemwjmugtgbe.supabase.co';
+const SB_KEY='sb_publishable_k7u_azd6k4olFFqJEp-Ukw_38bvYwFb';
+let sbClient=null;
+let sbSyncing=false;
+let sbLastSync=null;
+
+function initSupabase(){
+  try{
+    if(typeof supabase==='undefined'){console.warn('Supabase library not loaded');return;}
+    sbClient=supabase.createClient(SB_URL,SB_KEY);
+    console.log('✅ Supabase conectado');
+  }catch(e){console.error('Supabase init error:',e);}
+}
+
+function genId(){
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,function(c){
+    const r=Math.random()*16|0,v=c==='x'?r:(r&0x3|0x8);return v.toString(16);
+  });
+}
+
+function setSyncDot(color,title){
+  const d=$id('syncDot');if(d){d.style.background=color;d.title=title||'';}
+  const d2=$id('sbStatusDot');if(d2)d2.style.background=color;
+}
+function setSyncStatus(txt,sub){
+  const t=$id('sbStatusTxt');if(t)t.textContent=txt;
+  const s=$id('sbStatusSub');if(s)s.textContent=sub||'';
+  const card=$id('sbStatusCard');if(card)card.style.display='block';
+}
+
+function contactToRow(c){
+  return{
+    id:c.id,phone:c.phone,nome:c.nome,estado:c.estado||'?',
+    status:c.status||'pendente',service:c.service||'—',
+    campaign:c.campaign||'default',notes:c.notes||'',
+    done:c.done||false,sent_at:c.sentAt||null,
+    last_contact:c.lastContact||null,next_contact:c.nextContact||null,
+    fu_level:c.fuLevel||0,fu_msg_idx:c.fuMsgIdx||{1:-1,2:-1,3:-1},
+    history:c.history||[],var_idx:c.varIdx||0,
+    sent_hour:c.sentHour||null,xlsx_row_idx:c.xlsxRowIdx||null,
+    fu_resp:c.fuResp||null,score:calcScoreSafe(c)
+  };
+}
+function calcScoreSafe(c){
+  let s=0;
+  if(c.status==='interessado')s+=5;if(c.status==='respondeu')s+=3;
+  if(c.status==='fechado')s+=10;if(c.fuResp==='pos')s+=4;
+  return s;
+}
+function rowToContact(r){
+  return{
+    id:r.id,phone:r.phone,nome:r.nome,estado:r.estado||'?',
+    status:r.status||'pendente',service:r.service||'—',
+    campaign:r.campaign||'default',notes:r.notes||'',
+    done:r.done||false,sentAt:r.sent_at,lastContact:r.last_contact,
+    nextContact:r.next_contact,fuLevel:r.fu_level||0,
+    fuMsgIdx:r.fu_msg_idx||{1:-1,2:-1,3:-1},history:r.history||[],
+    varIdx:r.var_idx||0,sentHour:r.sent_hour,xlsxRowIdx:r.xlsx_row_idx,
+    fuResp:r.fu_resp
+  };
+}
+
+async function loadFromSupabase(){
+  if(!sbClient)return false;
+  try{
+    setSyncDot('#fbbf24','Carregando...');
+    setSyncStatus('🔄 Carregando dados do Supabase...','Aguarde um momento');
+    const [{data:c,error:ce},{data:camp,error:campe},{data:wh,error:whe}]=await Promise.all([
+      sbClient.from('contacts').select('*').order('created_at',{ascending:true}),
+      sbClient.from('campaigns').select('*'),
+      sbClient.from('webhooks').select('*')
+    ]);
+    if(ce){console.error('Contacts load error:',ce);throw ce;}
+    if(c&&c.length>0){
+      contacts=c.map(rowToContact);
+      console.log('✅ Loaded '+c.length+' contacts from Supabase');
+    } else if(contacts.length>0){
+      // Has local data but Supabase is empty — upload local data
+      console.log('Supabase empty, uploading local data...');
+      await syncToSupabase(true);
+    }
+    if(camp&&camp.length>0)campaigns=camp;
+    if(wh&&wh.length>0)webhooks=wh;
+    const total=contacts.length;
+    setSyncDot('#4ade80','Sincronizado');
+    setSyncStatus('✅ Supabase conectado',total+' leads carregados · '+(sbLastSync?'Última sync: '+sbLastSync:''));
+    sbLastSync=new Date().toLocaleTimeString('pt-BR');
+    return true;
+  }catch(e){
+    console.error('Supabase load error:',e);
+    setSyncDot('#f87171','Erro de conexão');
+    setSyncStatus('⚠️ Usando dados locais',e.message||'Sem conexão com o Supabase');
+    return false;
+  }
+}
+
+async function syncToSupabase(force){
+  if(!sbClient||sbSyncing)return;
+  if(!contacts.length&&!campaigns.length&&!webhooks.length)return;
+  sbSyncing=true;
+  setSyncDot('#fbbf24','Sincronizando...');
+  try{
+    // Contacts
+    if(contacts.length){
+      const rows=contacts.map(contactToRow);
+      const{error:ce}=await sbClient.from('contacts').upsert(rows,{onConflict:'id'});
+      if(ce)console.error('Contacts sync error:',ce);
+    }
+    // Campaigns
+    if(campaigns.length){
+      const{error:campe}=await sbClient.from('campaigns').upsert(campaigns,{onConflict:'id'});
+      if(campe)console.error('Campaigns sync error:',campe);
+    }
+    // Webhooks
+    if(webhooks.length){
+      const{error:whe}=await sbClient.from('webhooks').upsert(webhooks,{onConflict:'id'});
+      if(whe)console.error('Webhooks sync error:',whe);
+    }
+    sbLastSync=new Date().toLocaleTimeString('pt-BR');
+    setSyncDot('#4ade80','Sincronizado');
+    setSyncStatus('✅ Supabase sincronizado','Último sync: '+sbLastSync+' · '+contacts.length+' leads');
+    console.log('✅ Synced to Supabase at '+sbLastSync);
+  }catch(e){
+    console.error('Supabase sync error:',e);
+    setSyncDot('#f87171','Erro ao sincronizar');
+  }
+  sbSyncing=false;
+}
+
+async function syncNow(){
+  await syncToSupabase(true);
+  toast('✅ Sincronizado com Supabase!');
+}
+
+// Auto-sync a cada 3 minutos
+setInterval(()=>syncToSupabase(),3*60*1000);
+
 // ═══ TEMA ESCURO / CLARO ══════════════════════════════════
 function toggleTheme(){
   const cur=document.documentElement.getAttribute('data-theme')||'light';
@@ -1001,9 +1152,15 @@ let hideSent=false;
 // ═══ INIT ═════════════════════════════════════════════════
 (function init(){
   loadTheme();
-  loadStorage();buildMsgList();populateCampSelect();renderAll();renderTemplates();
+  initSupabase();
+  loadStorage(); // carrega localStorage primeiro (resposta rápida)
+  buildMsgList();populateCampSelect();renderAll();renderTemplates();
   const upd=()=>{const el=$id('saudacaoLive');if(el)el.textContent='🌅 '+getSaudacao();};
   upd();setInterval(upd,60000);
+  // Depois tenta Supabase em background
+  loadFromSupabase().then(ok=>{
+    if(ok){renderAll();renderCRM();renderDash();}
+  });
 })();
 
 // ═══ NAVEGAÇÃO ════════════════════════════════════════════
@@ -1120,7 +1277,7 @@ function loadContacts(){
     _commitContacts(newLeads);
   }
 }
-function mkC(phone,nome,idx,campaign){return{phone,nome,varIdx:idx,done:false,status:'pendente',sentAt:null,lastContact:null,nextContact:null,fuLevel:0,fuMsgIdx:{1:-1,2:-1,3:-1},campaign:campaign||'default',notes:'',sentHour:null,estado:getEstado(phone),service:'—',history:[]};}
+function mkC(phone,nome,idx,campaign){return{id:genId(),phone,nome,varIdx:idx,done:false,status:'pendente',sentAt:null,lastContact:null,nextContact:null,fuLevel:0,fuMsgIdx:{1:-1,2:-1,3:-1},campaign:campaign||'default',notes:'',sentHour:null,estado:getEstado(phone),service:'—',history:[]};}
 
 // ═══ BLACKLIST ════════════════════════════════════════════
 const BLACKLIST_STATUS=['nao_quer','sem_viabilidade','errado'];
@@ -2341,12 +2498,16 @@ async function executeSyncSheets(){
 }
 
 // ═══ STORAGE ══════════════════════════════════════════════
-function saveStorage(){try{localStorage.setItem('advshot2',JSON.stringify({contacts,campaigns,webhooks}));}catch(e){}}
+function saveStorage(){
+  try{localStorage.setItem('advshot2',JSON.stringify({contacts,campaigns,webhooks}));}catch(e){}
+  setTimeout(()=>syncToSupabase(),500);
+}
 function loadStorage(){
   try{
     const d=localStorage.getItem('advshot2');
     if(d){const p=JSON.parse(d);contacts=p.contacts||[];campaigns=p.campaigns||[];webhooks=p.webhooks||[];}
     contacts.forEach(c=>{
+      if(!c.id)c.id=genId();
       if(!c.estado)c.estado=getEstado(c.phone);
       if(!c.fuMsgIdx)c.fuMsgIdx={1:-1,2:-1,3:-1};
       if(!c.history)c.history=[];
@@ -2364,8 +2525,6 @@ function exportCSV(){
   const csv=rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
   const b=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='advshot-crm.csv';a.click();
 }
-
-console.log('✅ Supabase conectado!')
 </script>
 </body>
 </html>
