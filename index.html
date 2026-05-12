@@ -388,17 +388,39 @@ body,input,select,textarea,.card,.modal,.ci,.crm-card,.stat-box,.fu-card,.tpl-ca
     <button class="nav-tab" onclick="goTo('crm')">📊 CRM</button>
     <button class="nav-tab" onclick="goTo('dash')">📈 Dashboard</button>
     <button class="nav-tab" onclick="goTo('camp')">💼 Campanhas</button>
-    <button class="nav-tab" onclick="goTo('sheets')">📋 Planilhas</button>
-    <button class="nav-tab" onclick="goTo('import')">📂 Importar</button>
+    <button class="nav-tab" onclick="goTo('leads')">📋 Leads</button>
+    <button class="nav-tab" onclick="goTo('conexoes')">🔗 Conexões</button>
   </div>
   <div style="margin-left:auto;padding-left:8px;flex-shrink:0;display:flex;align-items:center;gap:6px;">
-    <div id="syncDot" title="Status Supabase" style="width:8px;height:8px;border-radius:50%;background:#aaa;flex-shrink:0;transition:background .3s;" ></div>
+    <div id="syncDot" title="Status Supabase" style="width:8px;height:8px;border-radius:50%;background:#aaa;flex-shrink:0;transition:background .3s;"></div>
+    <!-- WhatsApp button — real SVG logo -->
+    <button onclick="toast('🟢 Integração WhatsApp em breve!',3000)" title="Conectar WhatsApp"
+      style="background:#25D366;border:none;color:#fff;width:32px;height:32px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .2s;box-shadow:0 2px 6px rgba(37,211,102,.5);"
+      onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg">
+        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+      </svg>
+    </button>
+    <!-- Tema -->
     <button id="themeToggle" onclick="toggleTheme()" title="Alternar modo escuro/claro"
       style="background:none;border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.7);width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:.9rem;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .2s;"
       onmouseover="this.style.borderColor='var(--beige)'" onmouseout="this.style.borderColor='rgba(255,255,255,.2)'">🌙</button>
-    <button onclick="alert('Login em breve 🚀')"
-      style="background:none;border:1px solid rgba(255,255,255,.25);color:rgba(255,255,255,.7);padding:6px 12px;border-radius:99px;cursor:pointer;font-size:.72rem;font-family:'Cormorant Garamond',serif;font-weight:600;white-space:nowrap;transition:all .2s;"
-      onmouseover="this.style.borderColor='var(--beige)';this.style.color='var(--beige)'" onmouseout="this.style.borderColor='rgba(255,255,255,.25)';this.style.color='rgba(255,255,255,.7)'">👤 Entrar</button>
+    <!-- Login button -->
+    <div id="authBtn">
+      <button onclick="openLoginModal()"
+        style="background:none;border:1px solid rgba(255,255,255,.25);color:rgba(255,255,255,.7);padding:6px 12px;border-radius:99px;cursor:pointer;font-size:.72rem;font-family:'Cormorant Garamond',serif;font-weight:600;white-space:nowrap;transition:all .2s;display:flex;align-items:center;gap:5px;"
+        onmouseover="this.style.borderColor='var(--beige)';this.style.color='var(--beige)'" onmouseout="this.style.borderColor='rgba(255,255,255,.25)';this.style.color='rgba(255,255,255,.7)'">
+        👤 Entrar
+      </button>
+    </div>
+    <!-- User logado -->
+    <div id="userMenu" style="display:none;align-items:center;gap:6px;">
+      <img id="userAvatar" src="" style="width:28px;height:28px;border-radius:50%;border:2px solid rgba(255,255,255,.3);" alt="">
+      <span id="userName" style="font-size:.72rem;color:rgba(255,255,255,.7);max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+      <button onclick="signOutUser()" title="Sair"
+        style="background:none;border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.5);width:24px;height:24px;border-radius:50%;cursor:pointer;font-size:.7rem;display:flex;align-items:center;justify-content:center;"
+        onmouseover="this.style.borderColor='#f87171';this.style.color='#f87171'" onmouseout="this.style.borderColor='rgba(255,255,255,.2)';this.style.color='rgba(255,255,255,.5)'">✕</button>
+    </div>
   </div>
 </nav>
 
@@ -432,26 +454,8 @@ body,input,select,textarea,.card,.modal,.ci,.crm-card,.stat-box,.fu-card,.tpl-ca
     <div class="feat" onclick="goTo('crm')"><div class="fi">📊</div><h4>CRM + Follow Up</h4><p>Status, datas e IA</p></div>
     <div class="feat" onclick="goTo('dash')"><div class="fi">📈</div><h4>Dashboard</h4><p>Funil e leads quentes</p></div>
     <div class="feat" onclick="goTo('camp')"><div class="fi">💼</div><h4>Campanhas</h4><p>Organize e compare</p></div>
-  </div>
-  <div class="card">
-    <div class="card-title">💾 Backup</div>
-    <div class="row">
-      <button class="btn btn-dark" onclick="exportData()">⬇️ JSON</button>
-      <label class="btn btn-ghost" style="cursor:pointer;">📂 Importar<input type="file" accept=".json" onchange="importData(event)" style="display:none"></label>
-      <button class="btn btn-ghost" onclick="exportCSV()">📥 CSV</button>
-    </div>
-  </div>
-  <div class="card">
-    <div class="card-title">🟢 Google Sheets — CRM</div>
-    <p style="font-size:.78rem;color:var(--taupe);margin-bottom:10px;line-height:1.5;">Envia os leads para a aba <strong>CRM</strong> da sua planilha. Nunca apaga dados existentes — só adiciona novos e atualiza os que já estão lá.</p>
-    <div class="row" style="margin-bottom:8px;flex-wrap:wrap;">
-      <input type="url" id="sheetsWebhook" placeholder="URL do Google Apps Script..." style="flex:1;min-width:200px;">
-    </div>
-    <div class="row">
-      <button class="btn btn-green" onclick="confirmSync()">📤 Enviar para CRM</button>
-      <button class="btn btn-ghost" onclick="openSheetsModal()" style="font-size:.75rem;">📋 Como configurar</button>
-    </div>
-    <div id="syncStatus" style="font-size:.74rem;color:var(--taupe);margin-top:8px;"></div>
+    <div class="feat" onclick="goTo('conexoes')"><div class="fi">🔗</div><h4>Conexões</h4><p>Backup e integrações</p></div>
+    <div class="feat" onclick="goTo('leads')"><div class="fi">📋</div><h4>Base de Leads</h4><p>18k leads organizados</p></div>
   </div>
 </div>
 
@@ -644,11 +648,25 @@ body,input,select,textarea,.card,.modal,.ci,.crm-card,.stat-box,.fu-card,.tpl-ca
   <div class="card" id="campCompare" style="display:none"><div class="card-title">📊 Comparativo</div><div id="campCompareBody"></div></div>
 </div>
 
-<!-- PLANILHAS -->
-<div class="page" id="page-sheets">
+<!-- CONEXÕES -->
+<div class="page" id="page-conexoes">
+  <!-- GOOGLE SHEETS CRM -->
+  <div class="card">
+    <div class="card-title">🟢 Google Sheets — CRM</div>
+    <p style="font-size:.78rem;color:var(--taupe);margin-bottom:10px;line-height:1.5;">Envia os leads para a aba <strong>CRM</strong> da sua planilha. Nunca apaga dados existentes — só adiciona novos e atualiza os que já estão lá.</p>
+    <div class="row" style="margin-bottom:8px;flex-wrap:wrap;">
+      <input type="url" id="sheetsWebhook" placeholder="URL do Google Apps Script..." style="flex:1;min-width:200px;">
+    </div>
+    <div class="row">
+      <button class="btn btn-green" onclick="confirmSync()">📤 Enviar para CRM</button>
+      <button class="btn btn-ghost" onclick="openSheetsModal()" style="font-size:.75rem;">📋 Como configurar</button>
+    </div>
+    <div id="syncStatus" style="font-size:.74rem;color:var(--taupe);margin-top:8px;"></div>
+  </div>
+  <!-- GERENCIAR CONEXÕES WEBHOOKS -->
   <div class="card">
     <div class="card-title">🔗 Gerenciar Conexões</div>
-    <p style="font-size:.78rem;color:var(--taupe);margin-bottom:10px;line-height:1.5;">Adicione quantas planilhas quiser. Cada uma tem seu próprio webhook e finalidade.</p>
+    <p style="font-size:.78rem;color:var(--taupe);margin-bottom:10px;line-height:1.5;">Conecte planilhas Google Sheets via Apps Script para enviar e buscar dados.</p>
     <div class="row" style="flex-wrap:wrap;gap:6px;margin-bottom:8px;">
       <input type="text" id="whName" placeholder="Nome (ex: CRM Principal)" style="flex:1;min-width:130px;">
       <input type="url" id="whUrl" placeholder="URL do Apps Script..." style="flex:2;min-width:200px;">
@@ -656,6 +674,7 @@ body,input,select,textarea,.card,.modal,.ci,.crm-card,.stat-box,.fu-card,.tpl-ca
     </div>
     <div id="webhookList"></div>
   </div>
+  <!-- BUSCAR / LEADS DA PLANILHA -->
   <div class="card">
     <div class="card-title">📥 Buscar Leads da Planilha</div>
     <p style="font-size:.78rem;color:var(--taupe);margin-bottom:8px;line-height:1.5;">Puxa os leads salvos na planilha para o app. Útil se perdeu dados locais.</p>
@@ -666,8 +685,7 @@ body,input,select,textarea,.card,.modal,.ci,.crm-card,.stat-box,.fu-card,.tpl-ca
     <div id="pullStatus" style="font-size:.74rem;color:var(--taupe);margin-top:4px;"></div>
   </div>
   <div class="card">
-    <div class="card-title">👥 Leads da Planilha</div>
-    <p style="font-size:.78rem;color:var(--taupe);margin-bottom:8px;line-height:1.5;">Visualize e dispare leads direto da sua planilha de captação.</p>
+    <div class="card-title">👥 Leads da Planilha (Google Sheets)</div>
     <div class="row" style="margin-bottom:8px;flex-wrap:wrap;gap:6px;">
       <select id="leadsSheetSelect" style="flex:1;" onchange="loadLeadsFromSheet()"><option value="">Selecionar planilha...</option></select>
       <button class="btn btn-ghost" style="font-size:.74rem;" onclick="loadLeadsFromSheet()">🔄 Atualizar</button>
@@ -675,82 +693,137 @@ body,input,select,textarea,.card,.modal,.ci,.crm-card,.stat-box,.fu-card,.tpl-ca
     <div class="filter-row" id="leadsEstadoFilter"></div>
     <div id="leadsSheetTable"></div>
   </div>
+  <!-- BACKUP -->
+  <div class="card">
+    <div class="card-title">💾 Backup dos dados do CRM</div>
+    <p style="font-size:.78rem;color:var(--taupe);margin-bottom:10px;line-height:1.5;">Seus dados ficam no Supabase e no navegador. Faça backup regularmente para não perder nada.</p>
+    <div class="row" style="flex-wrap:wrap;gap:8px;">
+      <button class="btn btn-dark" onclick="exportData()" style="flex:1;min-width:120px;">⬇️ JSON</button>
+      <label class="btn btn-ghost" style="cursor:pointer;flex:1;min-width:120px;text-align:center;">📂 Importar JSON<input type="file" accept=".json" onchange="importData(event)" style="display:none"></label>
+      <button class="btn btn-ghost" onclick="exportCSV()" style="flex:1;min-width:120px;">📥 CSV</button>
+    </div>
+    <div style="margin-top:10px;padding:10px 12px;background:#e8f5e9;border:1px solid #a7d7ad;border-radius:8px;font-size:.74rem;color:#15803d;line-height:1.5;">
+      ✅ <strong>Seus dados NÃO são perdidos em atualizações.</strong> O código do app e os dados são coisas separadas. Atualizar o HTML só melhora as funcionalidades — o Supabase guarda tudo independente.
+    </div>
+  </div>
+  <!-- SCRIPT -->
   <div class="card">
     <div class="card-title">📋 Script para suas Planilhas</div>
-    <p style="font-size:.78rem;color:var(--taupe);margin-bottom:8px;line-height:1.5;">Cole este script em <strong>qualquer planilha</strong> que queira conectar (CRM, Leads, Formulários). Funciona para enviar E buscar dados.</p>
+    <p style="font-size:.78rem;color:var(--taupe);margin-bottom:8px;line-height:1.5;">Cole este script em <strong>qualquer planilha</strong> que queira conectar.</p>
     <button class="btn btn-ghost" onclick="openSheetsModal()" style="font-size:.75rem;">📋 Ver script completo</button>
   </div>
 </div>
 
-<!-- MODAL ESCOLHA DE MENSAGEM -->
-<div class="modal-overlay" id="msgPickerModal">
-  <div class="modal" style="max-width:460px;">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-      <h3 style="margin:0;">💬 Escolha a variação</h3>
-      <button onclick="closeMsgPicker()" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--taupe);">✕</button>
+<!-- LEADS -->
+<div class="page" id="page-leads">
+    <div class="card" id="importUploadCard">
+      <div class="card-title">📂 Base de Leads</div>
+      <div id="importSbStatus" style="margin-bottom:10px;"></div>
+      <div class="upload-zone" id="uploadZone"
+        onclick="$id('xlsxInput').click()"
+        ondragover="event.preventDefault();this.classList.add('drag')"
+        ondragleave="this.classList.remove('drag')"
+        ondrop="event.preventDefault();this.classList.remove('drag');handleXlsxFile(event.dataTransfer.files[0])">
+        <div class="fi">📊</div>
+        <h4>Suba sua planilha aqui</h4>
+        <p>Estrutura: A=Nome · B=WhatsApp · C=Tags · D=Estado · E=Enviado · F=Data</p>
+        <p style="margin-top:6px;font-size:.72rem;color:#aaa;">Upload único — depois acesse sempre pelo site sem precisar subir de novo</p>
+      </div>
+      <input type="file" id="xlsxInput" accept=".xlsx,.xls" style="display:none" onchange="handleXlsxFile(this.files[0])">
+      <div id="uploadProgressWrap" style="display:none;margin-top:12px;">
+        <div style="display:flex;justify-content:space-between;font-size:.76rem;color:var(--taupe);margin-bottom:4px;">
+          <span id="uploadProgressTxt">Preparando...</span>
+          <span id="uploadProgressPct">0%</span>
+        </div>
+        <div class="prog-bar"><div class="prog-fill" id="uploadProgressBar" style="width:0%;"></div></div>
+      </div>
     </div>
-    <p style="font-size:.76rem;color:var(--taupe);margin-bottom:12px;" id="msgPickerNome"></p>
-    <div id="msgPickerOptions" style="display:flex;flex-direction:column;gap:8px;"></div>
-  </div>
+    <div id="leadsViewerCard" style="display:none;">
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+          <div class="card-title" style="margin:0;">📋 Leads — <span id="lvTotalCount">carregando...</span></div>
+          <div style="display:flex;gap:6px;">
+            <button class="btn btn-ghost" style="font-size:.72rem;" onclick="refreshLeadsViewer()">🔄 Atualizar</button>
+            <button class="btn btn-ghost" style="font-size:.72rem;" onclick="showUploadArea()">➕ Adicionar leads</button>
+          </div>
+        </div>
+        <div id="lvEstadoTabs" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--gray);"></div>
+        <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
+          <input type="text" id="lvSearch" placeholder="🔍 Buscar por nome ou tag..." oninput="lvSearchDebounce()" style="flex:1;min-width:160px;">
+          <select id="lvCategoriaSel" onchange="lvPage=0;loadLeadsPage()" style="min-width:100px;"><option value="">Categoria</option></select>
+          <select id="lvTagSel" onchange="lvPage=0;loadLeadsPage()" style="min-width:120px;"><option value="">Todas as tags</option></select>
+          <select id="lvStatusSel" onchange="lvPage=0;loadLeadsPage()">
+            <option value="all">Todos</option>
+            <option value="pending">⏳ Pendentes</option>
+            <option value="sent">✅ Enviados</option>
+          </select>
+        </div>
+        <div class="import-top-actions">
+          <div class="import-count" id="lvCount"></div>
+          <button class="btn btn-ghost" style="font-size:.73rem;" onclick="lvSelectAllPage()">☑️ Selec. página</button>
+          <button class="btn btn-ghost" style="font-size:.73rem;" onclick="lvClearSel()">□ Limpar</button>
+        </div>
+        <div class="import-table-wrap">
+          <table class="import-table">
+            <thead><tr>
+              <th style="width:32px;"></th>
+              <th>Nome</th><th>WhatsApp</th><th>Tags</th><th>Estado</th><th>Categoria</th><th>Status</th>
+            </tr></thead>
+            <tbody id="lvTableBody"><tr><td colspan="7" style="text-align:center;padding:24px;color:#aaa;">Carregando leads...</td></tr></tbody>
+          </table>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;flex-wrap:wrap;gap:8px;">
+          <div style="display:flex;gap:6px;">
+            <button class="btn btn-ghost" style="font-size:.74rem;" onclick="lvPrevPage()" id="lvBtnPrev">← Anterior</button>
+            <span id="lvPageInfo" style="font-size:.76rem;color:var(--taupe);padding:6px 8px;"></span>
+            <button class="btn btn-ghost" style="font-size:.74rem;" onclick="lvNextPage()" id="lvBtnNext">Próxima →</button>
+          </div>
+          <button class="btn btn-taupe" style="min-height:42px;" onclick="lvSendToDisp()">
+            🚀 Enviar <span id="lvSelCount">0</span> ao Disparador
+          </button>
+        </div>
+      </div>
+    </div>
 </div>
 
-<!-- IMPORTAR PLANILHA -->
-<div class="page" id="page-import">
-  <!-- UPLOAD ZONE -->
-  <div class="card" id="importUploadCard">
-    <div class="card-title">📂 Importar Planilha Excel</div>
-    <div class="upload-zone" id="uploadZone"
-      onclick="$id('xlsxInput').click()"
-      ondragover="event.preventDefault();this.classList.add('drag')"
-      ondragleave="this.classList.remove('drag')"
-      ondrop="event.preventDefault();this.classList.remove('drag');handleXlsxFile(event.dataTransfer.files[0])">
-      <div class="fi">📊</div>
-      <h4>Clique ou arraste seu arquivo Excel aqui</h4>
-      <p>Formatos aceitos: .xlsx · .xls · .csv</p>
-      <p style="margin-top:6px;font-size:.72rem;color:#aaa;">Os dados ficam no seu computador — nada é enviado para servidores</p>
+<!-- MODAL LOGIN -->
+<div class="modal-overlay" id="loginModal">
+  <div class="modal" style="max-width:380px;">
+    <button class="modal-close" onclick="closeLoginModal()">✕</button>
+    <h3 style="text-align:center;margin-bottom:4px;">✦ Entrar no ADV Shot</h3>
+    <p style="text-align:center;font-size:.76rem;color:var(--taupe);margin-bottom:16px;">Escolha como prefere entrar</p>
+    <!-- Tab selector -->
+    <div style="display:flex;gap:0;border:1px solid var(--gray);border-radius:8px;overflow:hidden;margin-bottom:16px;">
+      <button id="ltbGoogle" onclick="switchLoginTab('google')"
+        style="flex:1;padding:8px;font-size:.78rem;font-weight:700;border:none;background:var(--taupe);color:#fff;cursor:pointer;transition:all .2s;">
+        <svg width="13" height="13" viewBox="0 0 24 24" style="vertical-align:middle;margin-right:4px;"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+        Google
+      </button>
+      <button id="ltbEmail" onclick="switchLoginTab('email')"
+        style="flex:1;padding:8px;font-size:.78rem;font-weight:700;border:none;background:var(--white);color:var(--taupe);cursor:pointer;transition:all .2s;border-left:1px solid var(--gray);">
+        ✉️ Email e senha
+      </button>
     </div>
-    <input type="file" id="xlsxInput" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleXlsxFile(this.files[0])">
-  </div>
-
-  <!-- MAPEAMENTO DE COLUNAS -->
-  <div class="card" id="importColCard" style="display:none">
-    <div class="card-title">🗂️ Confirmar Colunas Detectadas</div>
-    <p style="font-size:.76rem;color:var(--taupe);margin-bottom:10px;line-height:1.5;">Confirmei as colunas abaixo automaticamente. Corrija se necessário.</p>
-    <div class="col-map" id="colMapUI"></div>
-    <div style="display:flex;gap:8px;">
-      <button class="btn btn-taupe" style="flex:1;" onclick="applyColMap()">✅ Confirmar e ver leads</button>
-      <button class="btn btn-ghost" style="flex:1;" onclick="resetImport()">✕ Cancelar</button>
+    <!-- Google login -->
+    <div id="loginPanelGoogle">
+      <button onclick="signInWithGoogle()" style="width:100%;padding:12px;background:#fff;border:1.5px solid var(--gray);border-radius:10px;cursor:pointer;font-size:.84rem;font-weight:600;display:flex;align-items:center;justify-content:center;gap:10px;color:#3c4043;transition:box-shadow .2s;"
+        onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,.12)'" onmouseout="this.style.boxShadow='none'">
+        <svg width="18" height="18" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+        Continuar com Google
+      </button>
     </div>
-  </div>
-
-  <!-- PREVIEW + SELEÇÃO -->
-  <div class="card" id="importPreviewCard" style="display:none">
-    <div class="card-title">👥 Leads da Planilha</div>
-    <div class="import-top-actions">
-      <div class="import-count" id="importCount">0 leads</div>
-      <button class="btn btn-ghost" style="font-size:.74rem;" onclick="importSelectAll()">☑️ Selec. todos</button>
-      <button class="btn btn-ghost" style="font-size:.74rem;" onclick="importClearSel()">□ Limpar</button>
-      <button class="btn btn-ghost" style="font-size:.74rem;" onclick="resetImport()">📂 Outro arquivo</button>
+    <!-- Email/senha login -->
+    <div id="loginPanelEmail" style="display:none;">
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <input type="email" id="loginEmailInput" placeholder="seu@email.com" style="width:100%;">
+        <input type="password" id="loginPassInput" placeholder="Senha" style="width:100%;">
+        <button onclick="signInWithEmail()" class="btn btn-taupe btn-full" style="margin-top:4px;">Entrar</button>
+        <div style="text-align:center;font-size:.74rem;color:var(--taupe);margin:4px 0;">ou</div>
+        <button onclick="signUpWithEmail()" class="btn btn-ghost btn-full">Criar conta nova</button>
+        <button onclick="resetPassword()" style="background:none;border:none;color:var(--taupe);font-size:.72rem;cursor:pointer;margin-top:2px;">Esqueci a senha</button>
+      </div>
     </div>
-    <div class="import-table-wrap">
-      <table class="import-table">
-        <thead>
-          <tr>
-            <th style="width:32px;"></th>
-            <th>Nome</th>
-            <th>Telefone</th>
-            <th>Estado</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody id="importTableBody"></tbody>
-      </table>
-    </div>
-    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
-      <button class="btn btn-taupe" style="flex:2;" onclick="sendImportToDisp()">🚀 Enviar selecionados para o Disparador</button>
-      <button class="btn btn-green" style="flex:1;" id="btnDownloadXlsx" onclick="downloadUpdatedXlsx()" style="display:none;">⬇️ Baixar planilha atualizada</button>
-    </div>
-    <div id="importStatus" style="font-size:.74rem;color:var(--taupe);margin-top:8px;"></div>
+    <div id="loginError" style="color:var(--red);font-size:.74rem;margin-top:8px;display:none;"></div>
   </div>
 </div>
 
@@ -936,14 +1009,108 @@ const SB_KEY='sb_publishable_k7u_azd6k4olFFqJEp-Ukw_38bvYwFb';
 let sbClient=null;
 let sbSyncing=false;
 let sbLastSync=null;
+let currentUser=null;
 
 function initSupabase(){
   try{
     if(typeof supabase==='undefined'){console.warn('Supabase library not loaded');return;}
     sbClient=supabase.createClient(SB_URL,SB_KEY);
+    // Auth state listener
+    sbClient.auth.onAuthStateChange((event,session)=>{
+      currentUser=session?.user||null;
+      updateAuthUI();
+      if(event==='SIGNED_IN') toast('✅ Bem-vindo, '+( currentUser?.user_metadata?.full_name?.split(' ')[0]||'')+'!');
+      if(event==='SIGNED_OUT') toast('👋 Até logo!');
+    });
+    // Check existing session
+    sbClient.auth.getSession().then(({data:{session}})=>{
+      currentUser=session?.user||null;
+      updateAuthUI();
+    });
     console.log('✅ Supabase conectado');
   }catch(e){console.error('Supabase init error:',e);}
 }
+
+function signInWithGoogle(){
+  if(!sbClient){toast('❌ Supabase não conectado.');return;}
+  sbClient.auth.signInWithOAuth({
+    provider:'google',
+    options:{redirectTo:window.location.href}
+  });
+}
+function signOutUser(){
+  if(!sbClient)return;
+  sbClient.auth.signOut();
+  currentUser=null;
+  updateAuthUI();
+}
+function updateAuthUI(){
+  const authDiv=$id('authBtn');
+  const userDiv=$id('userMenu');
+  if(!authDiv||!userDiv)return;
+  if(currentUser){
+    authDiv.style.display='none';
+    userDiv.style.display='flex';
+    const avatar=currentUser.user_metadata?.avatar_url||'';
+    const name=currentUser.user_metadata?.full_name||currentUser.email||'Usuário';
+    const img=$id('userAvatar');
+    const nm=$id('userName');
+    if(img){img.src=avatar;img.style.display=avatar?'block':'none';}
+    if(nm)nm.textContent=name.split(' ')[0];
+  }else{
+    authDiv.style.display='block';
+    userDiv.style.display='none';
+  }
+}
+
+// ── Login modal ───────────────────────────────────────────
+function openLoginModal(){
+  const m=$id('loginModal');if(m)m.classList.add('open');
+  switchLoginTab('google');
+}
+function closeLoginModal(){
+  const m=$id('loginModal');if(m)m.classList.remove('open');
+  const err=$id('loginError');if(err){err.style.display='none';err.textContent='';}
+}
+function switchLoginTab(tab){
+  const pg=$id('loginPanelGoogle'),pe=$id('loginPanelEmail');
+  const bg=$id('ltbGoogle'),be=$id('ltbEmail');
+  if(pg)pg.style.display=tab==='google'?'block':'none';
+  if(pe)pe.style.display=tab==='email'?'block':'none';
+  if(bg){bg.style.background=tab==='google'?'var(--taupe)':'var(--white)';bg.style.color=tab==='google'?'#fff':'var(--taupe)';}
+  if(be){be.style.background=tab==='email'?'var(--taupe)':'var(--white)';be.style.color=tab==='email'?'#fff':'var(--taupe)';}
+}
+async function signInWithEmail(){
+  if(!sbClient)return;
+  const email=$id('loginEmailInput')?.value?.trim();
+  const pass=$id('loginPassInput')?.value;
+  if(!email||!pass){showLoginError('Preencha email e senha.');return;}
+  const{data,error}=await sbClient.auth.signInWithPassword({email,password:pass});
+  if(error)showLoginError(error.message);
+  else closeLoginModal();
+}
+async function signUpWithEmail(){
+  if(!sbClient)return;
+  const email=$id('loginEmailInput')?.value?.trim();
+  const pass=$id('loginPassInput')?.value;
+  if(!email||!pass){showLoginError('Preencha email e senha.');return;}
+  if(pass.length<6){showLoginError('Senha deve ter pelo menos 6 caracteres.');return;}
+  const{data,error}=await sbClient.auth.signUp({email,password:pass});
+  if(error)showLoginError(error.message);
+  else{closeLoginModal();toast('✅ Conta criada! Verifique seu email para confirmar.',4000);}
+}
+async function resetPassword(){
+  const email=prompt('Digite seu email para redefinir a senha:');
+  if(!email)return;
+  const{error}=await sbClient.auth.resetPasswordForEmail(email,{redirectTo:window.location.href});
+  if(error)toast('❌ '+error.message,4000);
+  else toast('✅ Email de redefinição enviado!',4000);
+}
+function showLoginError(msg){
+  const err=$id('loginError');
+  if(err){err.textContent=msg;err.style.display='block';}
+}
+
 
 function genId(){
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,function(c){
@@ -971,7 +1138,14 @@ function contactToRow(c){
     fu_level:c.fuLevel||0,fu_msg_idx:c.fuMsgIdx||{1:-1,2:-1,3:-1},
     history:c.history||[],var_idx:c.varIdx||0,
     sent_hour:c.sentHour||null,xlsx_row_idx:c.xlsxRowIdx||null,
-    fu_resp:c.fuResp||null,score:calcScoreSafe(c)
+    fu_resp:c.fuResp||null,score:calcScoreSafe(c),
+    // campos da base de leads
+    source:c.source||'crm',
+    tags:c.tags||'',
+    sheet_name:c.sheet_name||'',
+    col_e:c.col_e||'',
+    col_f:c.col_f||'',
+    categoria:c.categoria||''
   };
 }
 function calcScoreSafe(c){
@@ -999,16 +1173,16 @@ async function loadFromSupabase(){
     setSyncDot('#fbbf24','Carregando...');
     setSyncStatus('🔄 Carregando dados do Supabase...','Aguarde um momento');
     const [{data:c,error:ce},{data:camp,error:campe},{data:wh,error:whe}]=await Promise.all([
-      sbClient.from('contacts').select('*').order('created_at',{ascending:true}),
+      // ✅ Filtra APENAS contatos do CRM — exclui leads da planilha
+      sbClient.from('contacts').select('*').neq('source','planilha').order('created_at',{ascending:true}),
       sbClient.from('campaigns').select('*'),
       sbClient.from('webhooks').select('*')
     ]);
     if(ce){console.error('Contacts load error:',ce);throw ce;}
     if(c&&c.length>0){
       contacts=c.map(rowToContact);
-      console.log('✅ Loaded '+c.length+' contacts from Supabase');
+      console.log('✅ Loaded '+c.length+' CRM contacts from Supabase');
     } else if(contacts.length>0){
-      // Has local data but Supabase is empty — upload local data
       console.log('Supabase empty, uploading local data...');
       await syncToSupabase(true);
     }
@@ -1016,7 +1190,7 @@ async function loadFromSupabase(){
     if(wh&&wh.length>0)webhooks=wh;
     const total=contacts.length;
     setSyncDot('#4ade80','Sincronizado');
-    setSyncStatus('✅ Supabase conectado',total+' leads carregados · '+(sbLastSync?'Última sync: '+sbLastSync:''));
+    setSyncStatus('✅ Supabase conectado',total+' contatos CRM · '+(sbLastSync?'Última sync: '+sbLastSync:''));
     sbLastSync=new Date().toLocaleTimeString('pt-BR');
     return true;
   }catch(e){
@@ -1168,14 +1342,16 @@ function goTo(p){
   document.querySelectorAll('.page').forEach(e=>e.classList.remove('active'));
   document.querySelectorAll('.nav-tab').forEach(e=>e.classList.remove('active'));
   const pg=$id('page-'+p);if(pg)pg.classList.add('active');
-  const tabs=['home','disp','crm','dash','camp','sheets','import'];
+  const tabs=['home','disp','crm','dash','camp','leads','conexoes'];
   const tab=document.querySelectorAll('.nav-tab')[tabs.indexOf(p)];if(tab)tab.classList.add('active');
   if(p==='crm'){renderCRM();renderFU();}
   if(p==='dash')renderDash();
   if(p==='camp')renderCamps();
   if(p==='home')renderHome();
-  if(p==='sheets'){renderWebhooks();renderPullSelect();renderLeadsSheetSelect();}
+  if(p==='leads')initLeadsViewer();
+  if(p==='conexoes'){renderWebhooks();renderPullSelect();renderLeadsSheetSelect();}
 }
+function switchLeadsTab(tab){} // legado — removido
 function goSub(s){
   document.querySelectorAll('.sub-page').forEach(e=>e.classList.remove('active'));
   document.querySelectorAll('.sub-tab').forEach(e=>e.classList.remove('active'));
@@ -1303,7 +1479,13 @@ function _doOpenChat(i){
   addHistory(i,getMsg(contacts[i].nome,contacts[i].varIdx),'disparo');
   incrementDailySent();
   // Se veio de importação Excel, marca na planilha
-  if(contacts[i].xlsxRowIdx!=null) markXlsxRowSent(contacts[i].xlsxRowIdx);
+  if(contacts[i].xlsxSheetName&&contacts[i].xlsxRowIdx!=null){
+    markXlsxRowSent(contacts[i].xlsxSheetName,contacts[i].xlsxRowIdx);
+  } else if(contacts[i].xlsxRowIdx!=null){
+    markXlsxRowSent(null,contacts[i].xlsxRowIdx);
+  }
+  // Marca como enviado no Supabase (para leads vindos do viewer)
+  if(contacts[i].id) markLeadSentInSupabase(contacts[i].id);
   saveStorage();renderDisp();renderHome();
   return true;
 }
@@ -2023,479 +2205,337 @@ function renderHistoryBody(i){
 function renderTemplates(){
   const el=$id('tplGrid');if(!el)return;
   el.innerHTML=Object.entries(SERVICE_TEMPLATES).map(([key,t])=>
-    '<div class="tpl-card" onclick="useTpl(\''+key+'\')"><h5>'+t.icon+' '+t.title+'</h5><p>'+t.desc+'</p></div>'
+    '<div class="tpl-card" onclick="useTpl(\''+key+'\')"><h5>'+t.icon+' '+key+'</h5><p>'+t.desc+'</p></div>'
   ).join('');
 }
 function useTpl(key){
   const t=SERVICE_TEMPLATES[key];if(!t)return;
-  // Injeta o template como mensagem manual e ativa o modo manual
-  const msg=applyVars(t.msg,'[NOME]');
-  // Adiciona ao início das VARS dinamicamente para seleção manual
   setMode('manual');
-  // Mostra preview
-  toast('✅ Template "'+t.title+'" selecionado! Ative modo Manual e escolha abaixo.',3500);
-  // Adiciona como primeira opção visível
+  toast('✅ Template "'+key+'" selecionado!',3500);
   const mi=$id('mi0');
   if(mi){
     const span=mi.querySelector('span');
     if(span)span.textContent=t.msg.replace('{SAUDACAO}','[saudação]');
     selVar2(0);
-    // Salva temporariamente no VARS[0]
     VARS[0]=t.msg;
   }
 }
 function renderAll(){renderHome();renderDailyCounter();if(contacts.length){setDisplay('listSection','block');renderDisp();}}
 
-// ═══ IMPORTAR PLANILHA ════════════════════════════════════
-let importWB=null, importWS=null, importRawRows=[], importHeaders=[];
-let importColMap={phone:-1,name:-1,state:-1,sent:-1};
-let importLeads=[], importSelected=new Set();
+// ═══ IMPORTAR PLANILHA / LEADS VIEWER ════════════════════
+// Estrutura fixa: A=Nome B=WhatsApp C=Tags D=Estado E=Enviado F=Data
+const LV_COLS={name:0,phone:1,tags:2,estado:3,sent:4,sentDate:5};
+const LV_PAGE_SIZE=100;
+let lvPage=0, lvTotal=0, lvEstado='', lvEstados=[];
+let lvSelected=new Set(); // Set of contact ids
+let lvSearchTimer=null;
+let importWB=null, importSheets=[];
 
+// ── Inicializa o viewer quando entra na aba ───────────────
+async function initLeadsViewer(){
+  if(!sbClient){
+    setDisplay('importUploadCard','block');
+    setDisplay('leadsViewerCard','none');
+    const el=$id('importSbStatus');
+    if(el)el.innerHTML='<div style="background:#fdf2f2;border:1px solid #f5c6c6;border-radius:8px;padding:10px;font-size:.76rem;color:var(--red);">❌ Supabase não conectado. Verifique a configuração.</div>';
+    return;
+  }
+  // Verifica se já tem leads no Supabase
+  const{count}=await sbClient.from('contacts').select('*',{count:'exact',head:true}).eq('source','planilha');
+  if(count&&count>0){
+    setDisplay('importUploadCard','none');
+    setDisplay('leadsViewerCard','block');
+    await loadEstadoTabs();
+    await loadLeadsPage();
+  } else {
+    setDisplay('importUploadCard','block');
+    setDisplay('leadsViewerCard','none');
+    const el=$id('importSbStatus');
+    if(el)el.innerHTML='<div style="background:#e8f5e9;border:1px solid #a7d7ad;border-radius:8px;padding:10px;font-size:.76rem;color:#15803d;">✅ Supabase conectado. Faça o upload da sua planilha uma única vez abaixo.</div>';
+  }
+}
+
+function showUploadArea(){
+  setDisplay('importUploadCard','block');
+}
+
+// ── Filtro de estados (abas) ──────────────────────────────
+async function loadEstadoTabs(){
+  if(!sbClient)return;
+  // Busca estados distintos
+  const{data}=await sbClient.from('contacts').select('sheet_name').eq('source','planilha').not('sheet_name','is',null).limit(1000);
+  lvEstados=[...new Set((data||[]).map(r=>r.sheet_name).filter(Boolean))].sort();
+  localStorage.setItem('lv_estados',JSON.stringify(lvEstados));
+  renderEstadoTabs();
+}
+
+function renderEstadoTabs(){
+  const el=$id('lvEstadoTabs');if(!el)return;
+  el.innerHTML=['<button class="fb'+(lvEstado===''?' active':'')+'" onclick="lvSetEstado(\'\')">📍 Todos</button>']
+    .concat(lvEstados.map(e=>'<button class="fb'+(lvEstado===e?' active':'')+'" onclick="lvSetEstado(\''+e+'\')">'+e+'</button>'))
+    .join('');
+}
+
+function lvSetEstado(est){
+  lvEstado=est;lvPage=0;lvSelected.clear();
+  renderEstadoTabs();
+  loadLeadsPage();
+}
+
+// ── Carrega página de leads ───────────────────────────────
+async function loadLeadsPage(){
+  if(!sbClient)return;
+  const tbody=$id('lvTableBody');
+  if(tbody)tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:20px;color:#aaa;">🔄 Carregando...</td></tr>';
+
+  const search=($id('lvSearch')?.value||'').trim();
+  const tag=$id('lvTagSel')?.value||'';
+  const cat=$id('lvCategoriaSel')?.value||'';
+  const statusFilter=$id('lvStatusSel')?.value||'all';
+  const from=lvPage*LV_PAGE_SIZE, to=from+LV_PAGE_SIZE-1;
+
+  let q=sbClient.from('contacts').select('*',{count:'exact'}).eq('source','planilha');
+  if(lvEstado) q=q.eq('sheet_name',lvEstado);
+  if(statusFilter==='pending') q=q.eq('done',false);
+  if(statusFilter==='sent') q=q.eq('done',true);
+  if(search) q=q.ilike('nome','%'+search+'%');
+  if(tag) q=q.eq('tags',tag);
+  if(cat) q=q.eq('categoria',cat);
+  q=q.order('nome').range(from,to);
+
+  const{data,count,error}=await q;
+  if(error){if(tbody)tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--red);">❌ Erro ao carregar</td></tr>';return;}
+
+  lvTotal=count||0;
+  const totalPages=Math.ceil(lvTotal/LV_PAGE_SIZE);
+  const start=from+1, end=Math.min(to+1,lvTotal);
+
+  setTxt('lvTotalCount',lvTotal.toLocaleString('pt-BR')+' leads');
+  setTxt('lvCount',lvTotal+' leads · '+lvSelected.size+' selecionados');
+  setTxt('lvPageInfo',start+'-'+end+' de '+lvTotal);
+  const pb=$id('lvBtnPrev'),nb=$id('lvBtnNext');
+  if(pb)pb.disabled=lvPage===0;
+  if(nb)nb.disabled=lvPage>=totalPages-1;
+
+  // Atualiza tags e categorias
+  if(lvPage===0&&data){
+    const allTags=[...new Set(data.map(r=>r.tags).filter(Boolean))].sort();
+    const ts=$id('lvTagSel');
+    if(ts){const cur=ts.value;ts.innerHTML='<option value="">Todas as tags</option>'+allTags.map(t=>'<option value="'+esc(t)+'"'+(t===cur?' selected':'')+'>'+esc(t)+'</option>').join('');}
+    // Busca categorias distintas
+    const{data:cats}=await sbClient.from('contacts').select('categoria').eq('source','planilha').not('categoria','is',null);
+    const allCats=[...new Set((cats||[]).map(r=>r.categoria).filter(Boolean))].sort();
+    const cs=$id('lvCategoriaSel');
+    if(cs){const cur=cs.value;cs.innerHTML='<option value="">Categoria</option>'+allCats.map(c=>'<option value="'+esc(c)+'"'+(c===cur?' selected':'')+'>'+esc(c)+'</option>').join('');}
+  }
+
+  if(!data||!data.length){
+    if(tbody)tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:24px;color:#aaa;">Nenhum lead encontrado</td></tr>';
+    return;
+  }
+  if(tbody)tbody.innerHTML=(data||[]).map(c=>{
+    const sel=lvSelected.has(c.id);
+    const sent=c.done||/(enviado)/i.test(c.col_e||'');
+    return'<tr class="'+(sent?'sent':sel?'sel':'')+'" '+(sent?'':'onclick="lvToggle(\''+c.id+'\')" style="cursor:pointer;"')+'>'
+      +'<td><div class="import-chk '+(sel&&!sent?'on':'')+'" id="lvc-'+c.id+'">'+(sel&&!sent?'✓':'')+'</div></td>'
+      +'<td style="font-weight:600;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(cleanNome(c.nome))+'</td>'
+      +'<td style="font-family:monospace;font-size:.72rem;">'+c.phone+'</td>'
+      +'<td style="max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.74rem;color:var(--taupe);">'+esc(c.tags||'—')+'</td>'
+      +'<td><span class="estado-badge">'+esc(c.estado||c.sheet_name||'?')+'</span></td>'
+      +'<td style="font-size:.7rem;color:var(--taupe);">'+esc(c.categoria||'—')+'</td>'
+      +'<td>'+(sent?'<span class="sent-tag">✅ Enviado</span>'+(c.col_f?'<br><span style="font-size:.65rem;color:#aaa;">'+c.col_f+'</span>':''):'<span style="font-size:.7rem;color:#aaa;">Pendente</span>')+'</td>'
+      +'</tr>';
+  }).join('');
+}
+
+function lvSearchDebounce(){clearTimeout(lvSearchTimer);lvSearchTimer=setTimeout(()=>{lvPage=0;loadLeadsPage();},400);}
+function lvPrevPage(){if(lvPage>0){lvPage--;loadLeadsPage();}}
+function lvNextPage(){lvPage++;loadLeadsPage();}
+function lvToggle(id){
+  if(lvSelected.has(id))lvSelected.delete(id);else lvSelected.add(id);
+  const chk=$id('lvc-'+id);
+  if(chk){chk.classList.toggle('on',lvSelected.has(id));chk.textContent=lvSelected.has(id)?'✓':'';}
+  const tr=chk?.closest('tr');if(tr)tr.className=lvSelected.has(id)?'sel':'';
+  setTxt('lvSelCount',lvSelected.size);
+  setTxt('lvCount',lvTotal+' leads · '+lvSelected.size+' selecionados');
+}
+function lvSelectAllPage(){
+  document.querySelectorAll('#lvTableBody tr:not(.sent)').forEach(tr=>{
+    const chk=tr.querySelector('.import-chk');
+    if(!chk)return;
+    const id=chk.id.replace('lvc-','');
+    lvSelected.add(id);chk.classList.add('on');chk.textContent='✓';tr.className='sel';
+  });
+  setTxt('lvSelCount',lvSelected.size);
+  setTxt('lvCount',lvTotal+' leads · '+lvSelected.size+' selecionados');
+}
+function lvClearSel(){
+  lvSelected.clear();
+  document.querySelectorAll('#lvTableBody .import-chk.on').forEach(chk=>{
+    chk.classList.remove('on');chk.textContent='';chk.closest('tr').className='';
+  });
+  setTxt('lvSelCount',0);
+  setTxt('lvCount',lvTotal+' leads · 0 selecionados');
+}
+
+// ── Envia selecionados ao Disparador ─────────────────────
+async function lvSendToDisp(){
+  if(!lvSelected.size){toast('⚠️ Selecione pelo menos um lead.');return;}
+  if(!sbClient){toast('❌ Sem conexão com Supabase.');return;}
+  // Busca os dados dos leads selecionados
+  const ids=[...lvSelected];
+  const{data,error}=await sbClient.from('contacts').select('*').in('id',ids);
+  if(error||!data?.length){toast('❌ Erro ao buscar leads.');return;}
+  const campId=$id('dispCamp')?.value||'default';
+  const existingPhones=new Set(contacts.map(c=>c.phone.replace(/\D/g,'')));
+  let added=0,dupes=0;
+  data.forEach(row=>{
+    const p=row.phone.replace(/\D/g,'');
+    if(existingPhones.has(p)){dupes++;return;}
+    existingPhones.add(p);
+    const c=rowToContact(row);
+    c.campaign=campId;
+    c.varIdx=added;
+    contacts.push(c);
+    added++;
+  });
+  saveStorage();
+  setDisplay('listSection','block');
+  renderDisp();renderHome();
+  goTo('disp');
+  toast('✅ '+added+' leads no Disparador!'+(dupes?' · '+dupes+' já existiam':''));
+  lvSelected.clear();
+  setTxt('lvSelCount',0);
+}
+
+// ── Marca como enviado no Supabase ───────────────────────
+async function markLeadSentInSupabase(contactId){
+  if(!sbClient||!contactId)return;
+  const now=new Date();
+  const dateStr=now.toLocaleDateString('pt-BR')+' '+now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+  await sbClient.from('contacts').update({
+    col_e:'ENVIADO',
+    col_f:dateStr,
+    done:true,
+    sent_at:now.toLocaleString('pt-BR'),
+    sent_hour:now.getHours()
+  }).eq('id',contactId);
+}
+
+async function refreshLeadsViewer(){await loadEstadoTabs();await loadLeadsPage();}
+
+// ── Upload xlsx → Supabase ────────────────────────────────
 function ensureXLSX(cb){
   if(typeof XLSX!=='undefined'){cb();return;}
   const s=document.createElement('script');
   s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
-  s.onload=cb;
-  s.onerror=()=>{
-    toast('❌ Não foi possível carregar a biblioteca Excel. Verifique sua conexão.',4000);
-    const uz=$id('uploadZone');
-    if(uz)uz.innerHTML='<div class="fi">❌</div><h4>Sem conexão à internet</h4><p>A leitura de Excel requer conexão para baixar a biblioteca na primeira vez.<br>Após baixar uma vez, funciona offline.</p>';
-  };
+  s.onload=cb;s.onerror=()=>toast('❌ Sem conexão para carregar a biblioteca.',4000);
   document.head.appendChild(s);
 }
 
 function handleXlsxFile(file){
-  if(!file){toast('⚠️ Nenhum arquivo selecionado.');return;}
-  // Feedback visual imediato
+  if(!file)return;
   const uz=$id('uploadZone');
-  if(uz)uz.innerHTML='<div class="fi">⏳</div><h4>Carregando...</h4><p>'+esc(file.name)+'</p>';
-  ensureXLSX(()=>_parseXlsx(file));
+  if(uz)uz.innerHTML='<div class="fi">⏳</div><h4>Lendo planilha...</h4><p>'+esc(file.name)+'</p>';
+  ensureXLSX(()=>_parseAndUpload(file));
 }
 
-function _parseXlsx(file){
+function _parseAndUpload(file){
   const reader=new FileReader();
-  reader.onload=function(e){
+  reader.onload=async function(e){
     try{
-      let wb;
-      // CSV ou Excel
-      if(file.name.toLowerCase().endsWith('.csv')){
-        const text=new TextDecoder('utf-8').decode(new Uint8Array(e.target.result));
-        wb=XLSX.read(text,{type:'string'});
-      } else {
-        wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
-      }
-      if(!wb.SheetNames.length){toast('⚠️ Planilha sem abas.');return;}
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
       importWB=wb;
-      importWS=wb.Sheets[wb.SheetNames[0]];
-      importRawRows=XLSX.utils.sheet_to_json(importWS,{header:1,defval:''});
-      if(importRawRows.length<2){toast('⚠️ Planilha precisa ter pelo menos 2 linhas (cabeçalho + dados).');resetImport();return;}
-      importHeaders=importRawRows[0].map(h=>String(h||'').trim());
-      autoDetectCols();
-      renderColMapUI();
-      setDisplay('importUploadCard','none');
-      setDisplay('importColCard','block');
-      setDisplay('importPreviewCard','none');
-      toast('✅ '+file.name+' — '+(importRawRows.length-1)+' linhas detectadas');
+      // Pede categoria ao usuário (PF, PJ, Servidores, etc.)
+      const categoria=prompt('Qual a categoria desta planilha? (ex: PF, PJ, Servidores, Empresas...)\nDeixe vazio para usar o nome das abas.','PF')||'';
+      let allLeads=[], estadosList=[];
+      wb.SheetNames.forEach(shName=>{
+        const ws=wb.Sheets[shName];
+        if(!ws)return;
+        const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+        if(rows.length<2)return;
+        estadosList.push(shName);
+        rows.slice(1).forEach((row,ri)=>{
+          const phone=String(row[LV_COLS.phone]||'').replace(/\D/g,'');
+          if(!phone||phone.length<8)return;
+          const nome=String(row[LV_COLS.name]||'').trim()||phone;
+          const tags=String(row[LV_COLS.tags]||'').trim();
+          const estadoCell=String(row[LV_COLS.estado]||'').trim()||shName;
+          const colEVal=String(row[LV_COLS.sent]||'').trim();
+          const colFVal=String(row[LV_COLS.sentDate]||'').trim();
+          // ✅ Fix: enviado ≠ respondeu — mantém 'pendente' no status CRM
+          const alreadySent=/(enviado|sent)/i.test(colEVal)&&colEVal.length>0;
+          allLeads.push({
+            id:genId(),
+            phone, nome,
+            estado:estadoCell||shName,
+            tags,
+            sheet_name:shName,
+            col_e:colEVal,
+            col_f:colFVal,
+            source:'planilha',
+            categoria:categoria||'',      // PF, PJ, Servidores...
+            status:'pendente',            // ✅ sempre pendente — enviado ≠ respondido
+            done:alreadySent,             // marca done se col E = ENVIADO
+            service:tags||'—',
+            fu_level:0,
+            fu_msg_idx:{1:-1,2:-1,3:-1},
+            history:[],
+            var_idx:0
+          });
+        });
+      });
+      if(!allLeads.length){toast('⚠️ Nenhum lead encontrado.');return;}
+      toast('📊 '+allLeads.length+' leads lidos. Enviando ao Supabase...',3000);
+      setDisplay('uploadProgressWrap','block');
+      await uploadLeadsToSb(allLeads,estadosList);
     }catch(err){
-      console.error('Erro XLSX:',err);
-      toast('❌ Erro ao ler: '+err.message,4000);
-      resetImport();
+      console.error(err);
+      toast('❌ Erro: '+err.message,4000);
+      const uz=$id('uploadZone');
+      if(uz)uz.innerHTML='<div class="fi">📊</div><h4>Suba sua planilha aqui</h4><p>Estrutura: A=Nome · B=WhatsApp · C=Tags · D=Estado · E=Enviado · F=Data</p>';
     }
   };
-  reader.onerror=()=>{toast('❌ Erro ao ler o arquivo.');resetImport();};
   reader.readAsArrayBuffer(file);
 }
 
-function autoDetectCols(){
-  importColMap={phone:-1,name:-1,state:-1,sent:-1};
-  const sampleRows=importRawRows.slice(1,6); // até 5 linhas de dados
+async function uploadLeadsToSb(leads,estadosList){
+  if(!sbClient){toast('❌ Supabase não conectado.');return;}
+  const BATCH=500;
+  let done=0;
+  const total=leads.length;
 
-  importHeaders.forEach((h,i)=>{
-    const hl=h.toLowerCase();
-    // Verifica pelo cabeçalho
-    if(importColMap.phone===-1&&/(tel|fone|whats|celular|n[uú]mero|phone|mobile)/i.test(hl)) importColMap.phone=i;
-    if(importColMap.name===-1&&/(nome|name|cliente|contato|razão|razao)/i.test(hl)) importColMap.name=i;
-    if(importColMap.state===-1&&/(estado|uf|state|regi)/i.test(hl)) importColMap.state=i;
-    if(importColMap.sent===-1&&/(envi|sent|status|situac|dispar)/i.test(hl)) importColMap.sent=i;
-  });
-
-  // Se não achou telefone pelo cabeçalho, verifica pelo conteúdo dos dados
-  if(importColMap.phone===-1){
-    importHeaders.forEach((_,i)=>{
-      if(importColMap.phone!==-1)return;
-      const vals=sampleRows.map(r=>String(r[i]||'').trim()).filter(Boolean);
-      // Checa se a coluna tem números de telefone ou links wa.me
-      const hasPhone=vals.some(v=>
-        /^[\d\s\(\)\-\+]{8,15}$/.test(v.replace(/\D/g,''))&&v.replace(/\D/g,'').length>=8
-      );
-      const hasWa=vals.some(v=>v.includes('wa.me')||v.includes('whatsapp'));
-      if(hasPhone||hasWa) importColMap.phone=i;
-    });
+  for(let i=0;i<leads.length;i+=BATCH){
+    const batch=leads.slice(i,i+BATCH);
+    const{error}=await sbClient.from('contacts').upsert(batch,{onConflict:'phone,source'});
+    if(error)console.error('Batch error:',error);
+    done+=batch.length;
+    const pct=Math.round(done/total*100);
+    setTxt('uploadProgressTxt',done.toLocaleString('pt-BR')+' de '+total.toLocaleString('pt-BR')+' leads enviados...');
+    setTxt('uploadProgressPct',pct+'%');
+    const bar=$id('uploadProgressBar');if(bar)bar.style.width=pct+'%';
   }
-  // Se não achou nome, checa coluna com texto longo (provavelmente nome)
-  if(importColMap.name===-1){
-    importHeaders.forEach((_,i)=>{
-      if(importColMap.name!==-1||i===importColMap.phone)return;
-      const vals=sampleRows.map(r=>String(r[i]||'').trim()).filter(Boolean);
-      const hasNames=vals.some(v=>/^[A-Za-zÀ-ú\s]{4,50}$/.test(v)&&v.includes(' '));
-      if(hasNames) importColMap.name=i;
-    });
-  }
+
+  // Salva lista de estados
+  localStorage.setItem('lv_estados',JSON.stringify(estadosList));
+  lvEstados=estadosList;
+
+  setTxt('uploadProgressTxt','✅ '+total.toLocaleString('pt-BR')+' leads salvos no Supabase!');
+  toast('✅ '+total.toLocaleString('pt-BR')+' leads no Supabase!',4000);
+
+  // Mostra o viewer
+  setTimeout(async()=>{
+    setDisplay('importUploadCard','none');
+    setDisplay('leadsViewerCard','block');
+    setDisplay('uploadProgressWrap','none');
+    lvEstado='';
+    renderEstadoTabs();
+    await loadLeadsPage();
+  },1500);
 }
 
-function colLetter(i){
-  let s='',n=i+1;
-  while(n>0){s=String.fromCharCode(64+(n%26||26))+s;n=Math.floor((n-1)/26);}
-  return s;
-}
+function markXlsxRowSent(sheetName,rowIdx){} // compatibilidade (não usado com Supabase)
 
-function renderColMapUI(){
-  const el=$id('colMapUI');if(!el)return;
-  const sampleRows=importRawRows.slice(1,4);
-  const fields=[
-    {key:'phone',label:'📱 Telefone / WhatsApp',required:true,hint:'Números ou links wa.me'},
-    {key:'name', label:'👤 Nome',required:false,hint:'Nome do lead'},
-    {key:'state',label:'📍 Estado (UF)',required:false,hint:'SP, BA, RJ...'},
-    {key:'sent', label:'✅ Coluna "Enviado"',required:false,hint:'Para marcar quando disparado'}
-  ];
-
-  el.innerHTML=fields.map(f=>`
-    <div class="col-map-item">
-      <label>${f.label}${f.required?' <span style="color:var(--red)">*</span>':''}</label>
-      <select id="cmap_${f.key}" onchange="importColMap['${f.key}']=parseInt(this.value);updateColPreview('${f.key}')" style="width:100%;margin-bottom:4px;">
-        <option value="-1">— não usar —</option>
-        ${importHeaders.map((h,i)=>{
-          const sampleVal=sampleRows.map(r=>String(r[i]||'').trim()).filter(Boolean)[0]||'';
-          const preview=sampleVal.length>20?sampleVal.substring(0,20)+'…':sampleVal;
-          return`<option value="${i}"${importColMap[f.key]===i?' selected':''}>${colLetter(i)} — ${h||'(sem nome)'} ${preview?'· ex: '+preview:''}  </option>`;
-        }).join('')}
-      </select>
-      <div id="preview_${f.key}" style="font-size:.68rem;color:var(--taupe);min-height:14px;"></div>
-    </div>`).join('');
-
-  // Mostra previews iniciais
-  fields.forEach(f=>updateColPreview(f.key));
-}
-
-function updateColPreview(key){
-  const idx=importColMap[key];
-  const el=$id('preview_'+key);
-  if(!el)return;
-  if(idx<0){el.textContent='';return;}
-  const samples=importRawRows.slice(1,4).map(r=>String(r[idx]||'').trim()).filter(Boolean);
-  el.textContent=samples.length?'Exemplo: '+samples.slice(0,2).join(' · '):'(coluna vazia)';
-}
-
-function applyColMap(){
-  if(importColMap.phone===-1){toast('⚠️ Selecione a coluna de telefone.');return;}
-  // Parse rows (skip header)
-  importLeads=[];
-  importSelected.clear();
-  importRawRows.slice(1).forEach((row,ri)=>{
-    const phone=String(row[importColMap.phone]||'').replace(/\D/g,'');
-    if(!phone||phone.length<8)return;
-    const nome=importColMap.name>=0?String(row[importColMap.name]||'').trim():phone;
-    const estado=importColMap.state>=0?String(row[importColMap.state]||'').trim():'';
-    const sentVal=importColMap.sent>=0?String(row[importColMap.sent]||'').trim():'';
-    const alreadySent=/(enviado|sent|sim|yes|ok)/i.test(sentVal);
-    importLeads.push({
-      phone, nome, estado:estado||getEstado(phone),
-      alreadySent, rowIdx:ri+1  // +1 because we skipped header
-    });
-  });
-  setDisplay('importColCard','none');
-  setDisplay('importPreviewCard','block');
-  renderImportTable();
-}
-
-function renderImportTable(){
-  const el=$id('importTableBody');if(!el)return;
-  const total=importLeads.length;
-  const pending=importLeads.filter(l=>!l.alreadySent).length;
-  const cnt=$id('importCount');
-  if(cnt)cnt.textContent=`${total} leads · ${pending} pendentes · ${total-pending} já enviados`;
-  el.innerHTML=importLeads.map((l,i)=>{
-    const sel=importSelected.has(i);
-    const isSent=l.alreadySent;
-    return`<tr class="${isSent?'sent':sel?'sel':''}" onclick="${isSent?'':'toggleImportRow('+i+')'}" style="${isSent?'':'cursor:pointer;'}">
-      <td><div class="import-chk ${sel&&!isSent?'on':''}" id="ichk-${i}">${sel&&!isSent?'✓':''}</div></td>
-      <td style="font-weight:600;">${esc(l.nome)}</td>
-      <td style="font-family:monospace;font-size:.74rem;">${l.phone}</td>
-      <td><span class="estado-badge">${l.estado||'?'}</span></td>
-      <td>${isSent?'<span class="sent-tag">✅ Enviado</span>':'<span style="font-size:.72rem;color:#aaa;">Pendente</span>'}</td>
-    </tr>`;
-  }).join('');
-  const dlBtn=$id('btnDownloadXlsx');
-  if(dlBtn)dlBtn.style.display=importLeads.some(l=>l.alreadySent)?'block':'none';
-}
-
-function toggleImportRow(i){
-  if(importLeads[i]?.alreadySent)return;
-  if(importSelected.has(i))importSelected.delete(i);
-  else importSelected.add(i);
-  const chk=$id('ichk-'+i);
-  if(chk){chk.classList.toggle('on',importSelected.has(i));chk.textContent=importSelected.has(i)?'✓':'';}
-  const tr=chk?.closest('tr');
-  if(tr)tr.className=importSelected.has(i)?'sel':'';
-  const cnt=$id('importCount');
-  if(cnt){
-    const total=importLeads.length,pending=importLeads.filter(l=>!l.alreadySent).length;
-    cnt.textContent=`${total} leads · ${pending} pendentes · ${importSelected.size} selecionados`;
-  }
-}
-function importSelectAll(){importLeads.forEach((_,i)=>{if(!importLeads[i].alreadySent)importSelected.add(i);});renderImportTable();}
-function importClearSel(){importSelected.clear();renderImportTable();}
-
-function sendImportToDisp(){
-  if(!importSelected.size){toast('⚠️ Selecione pelo menos um lead.');return;}
-  const campId=($id('dispCamp')?.value)||'default';
-  const existingPhones=new Set(contacts.map(c=>c.phone.replace(/\D/g,'')));
-  const novos=[], dupes=[];
-  importSelected.forEach(i=>{
-    const l=importLeads[i];
-    if(existingPhones.has(l.phone)) dupes.push(l);
-    else novos.push(l);
-  });
-  // Build contacts
-  const toAdd=[...novos,...dupes].map((l,idx)=>({
-    ...mkC(l.phone,l.nome||l.phone,idx,campId),
-    estado:l.estado||getEstado(l.phone),
-    xlsxRowIdx:l.rowIdx  // keep reference to update xlsx later
-  }));
-  contacts=[...contacts,...toAdd];
-  saveStorage();
-  setDisplay('listSection','block');
-  renderDisp();renderHome();
-  // Go to dispatcher
-  goTo('disp');
-  const st=$id('importStatus');
-  if(st)st.textContent=`✅ ${toAdd.length} leads enviados para o Disparador${dupes.length?' ('+dupes.length+' já existiam)':''}`;
-  toast(`✅ ${toAdd.length} leads no Disparador!`);
-}
-
-function markXlsxRowSent(rowIdx){
-  if(!importWS||!importWB)return;
-  const dateStr=new Date().toLocaleDateString('pt-BR');
-  // Find or create ENVIADO column
-  let sentCol=importColMap.sent;
-  if(sentCol===-1){
-    // Add new column at the end
-    const ref=importWS['!ref'];
-    if(ref){
-      const range=XLSX.utils.decode_range(ref);
-      sentCol=range.e.c+1;
-      importColMap.sent=sentCol;
-      // Add header
-      const headerCell=XLSX.utils.encode_cell({r:0,c:sentCol});
-      importWS[headerCell]={v:'ENVIADO',t:'s'};
-      // Update range
-      range.e.c=sentCol;
-      importWS['!ref']=XLSX.utils.encode_range(range);
-    }
-  }
-  if(sentCol>=0){
-    const cellAddr=XLSX.utils.encode_cell({r:rowIdx,c:sentCol});
-    importWS[cellAddr]={v:'ENVIADO - '+dateStr,t:'s'};
-    // Also add date in next col
-    const dateAddr=XLSX.utils.encode_cell({r:rowIdx,c:sentCol+1});
-    importWS[dateAddr]={v:dateStr,t:'s'};
-    // Mark lead as sent in UI
-    if(importLeads[rowIdx-1]){importLeads[rowIdx-1].alreadySent=true;}
-  }
-  const dlBtn=$id('btnDownloadXlsx');
-  if(dlBtn)dlBtn.style.display='block';
-}
-
-function downloadUpdatedXlsx(){
-  if(!importWB){toast('⚠️ Nenhuma planilha carregada.');return;}
-  const out=XLSX.write(importWB,{bookType:'xlsx',type:'array'});
-  const blob=new Blob([out],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);
-  a.download='leads_atualizado_'+new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')+'.xlsx';
-  a.click();
-  toast('⬇️ Planilha atualizada baixada!');
-}
-
-function resetImport(){
-  importWB=null;importWS=null;importRawRows=[];importHeaders=[];
-  importLeads=[];importSelected.clear();
-  importColMap={phone:-1,name:-1,state:-1,sent:-1};
-  // Restore upload zone
-  const uz=$id('uploadZone');
-  if(uz)uz.innerHTML='<div class="fi">📊</div><h4>Clique ou arraste seu arquivo Excel aqui</h4><p>Formatos aceitos: .xlsx · .xls · .csv</p><p style="margin-top:6px;font-size:.72rem;color:#aaa;">Os dados ficam no seu computador — nada é enviado para servidores</p>';
-  setDisplay('importUploadCard','block');
-  setDisplay('importColCard','none');
-  setDisplay('importPreviewCard','none');
-  const inp=$id('xlsxInput');if(inp)inp.value='';
-}
-
-
-let leadsSheetData=[], leadsEstadoF='todos';
-
-function addWebhook(){
-  const name=($id('whName').value||'').trim();
-  const url=($id('whUrl').value||'').trim();
-  if(!name||!url){toast('⚠️ Preencha nome e URL.');return;}
-  webhooks.push({id:'w'+Date.now(),name,url});
-  $id('whName').value='';$id('whUrl').value='';
-  saveStorage();renderWebhooks();renderPullSelect();renderLeadsSheetSelect();
-  toast('✅ Planilha "'+name+'" adicionada!');
-}
-function deleteWebhook(id){
-  webhooks=webhooks.filter(w=>w.id!==id);
-  saveStorage();renderWebhooks();renderPullSelect();renderLeadsSheetSelect();
-}
-function renderWebhooks(){
-  const el=$id('webhookList');if(!el)return;
-  if(!webhooks.length){el.innerHTML='<div class="empty" style="padding:12px;">Nenhuma planilha configurada ainda.</div>';return;}
-  el.innerHTML=webhooks.map(w=>'<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--gray);border-radius:8px;margin-bottom:6px;background:var(--white);">'
-    +'<div style="flex:1;min-width:0;"><div style="font-size:.82rem;font-weight:600;font-family:\'Libre Baskerville\',serif;">'+esc(w.name)+'</div>'
-    +'<div style="font-size:.68rem;color:#aaa;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(w.url)+'</div></div>'
-    +'<button class="btn btn-green" style="font-size:.72rem;padding:5px 10px;white-space:nowrap;" onclick="quickSync(\''+w.id+'\')">📤 Enviar</button>'
-    +'<button class="btn btn-ghost" style="font-size:.72rem;padding:5px 8px;" onclick="deleteWebhook(\''+w.id+'\')">🗑</button>'
-    +'</div>').join('');
-}
-async function quickSync(id){
-  const w=webhooks.find(x=>x.id===id);if(!w)return;
-  toast('🔄 Enviando para "'+w.name+'"...',1500);
-  try{
-    const res=await fetch(w.url,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({contacts,campaigns})});
-    const data=await res.json();
-    if(data.ok)toast('✅ '+w.name+' — '+(data.added||0)+' novo(s), '+(data.updated||0)+' atualizado(s)');
-    else toast('❌ Erro: '+(data.error||'?'));
-  }catch(e){toast('❌ Falha ao conectar com "'+w.name+'"');}
-}
-
-function renderPullSelect(){
-  const sel=$id('pullSelect');if(!sel)return;
-  sel.innerHTML='<option value="">Selecionar planilha...</option>'
-    +webhooks.map(w=>'<option value="'+w.id+'">'+esc(w.name)+'</option>').join('');
-}
-function renderLeadsSheetSelect(){
-  const sel=$id('leadsSheetSelect');if(!sel)return;
-  sel.innerHTML='<option value="">Selecionar planilha de leads...</option>'
-    +webhooks.map(w=>'<option value="'+w.id+'">'+esc(w.name)+'</option>').join('');
-}
-
-async function pullFromSheet(){
-  const id=($id('pullSelect').value||'');
-  const st=$id('pullStatus');
-  if(!id){if(st)st.textContent='⚠️ Selecione uma planilha.';return;}
-  const w=webhooks.find(x=>x.id===id);if(!w)return;
-  if(st)st.textContent='🔄 Buscando dados de "'+w.name+'"...';
-  try{
-    const res=await fetch(w.url,{method:'GET'});
-    const data=await res.json();
-    if(data.contacts&&data.contacts.length){
-      // Merge: só adiciona quem não existe pelo telefone
-      const phones=new Set(contacts.map(c=>c.phone));
-      const novos=data.contacts.filter(c=>!phones.has(c.phone));
-      novos.forEach(c=>{if(!c.fuMsgIdx)c.fuMsgIdx={1:-1,2:-1,3:-1};if(!c.estado)c.estado=getEstado(c.phone);});
-      contacts=[...contacts,...novos];
-      saveStorage();renderAll();renderCRM();
-      if(st)st.textContent='✅ '+novos.length+' leads importados de "'+w.name+'". Total: '+contacts.length;
-      toast('✅ '+novos.length+' leads importados!');
-    }else{
-      if(st)st.textContent='ℹ️ Nenhum lead novo encontrado na planilha.';
-    }
-  }catch(e){if(st)st.textContent='❌ Erro. Verifique se o script tem a função doGet.';}
-}
-
-async function loadLeadsFromSheet(){
-  const id=($id('leadsSheetSelect').value||'');
-  const el=$id('leadsSheetTable');
-  if(!id){if(el)el.innerHTML='<div class="empty">Selecione uma planilha acima.</div>';return;}
-  const w=webhooks.find(x=>x.id===id);if(!w)return;
-  if(el)el.innerHTML='<div style="text-align:center;padding:20px;color:#aaa;font-size:.8rem;">🔄 Carregando...</div>';
-  try{
-    const res=await fetch(w.url,{method:'GET'});
-    const data=await res.json();
-    leadsSheetData=data.contacts||[];
-    renderLeadsEstadoFilter();
-    renderLeadsTable();
-  }catch(e){if(el)el.innerHTML='<div class="empty">❌ Erro ao buscar. Verifique a URL e a função doGet.</div>';}
-}
-function renderLeadsEstadoFilter(){
-  const el=$id('leadsEstadoFilter');if(!el)return;
-  const states=[...new Set(leadsSheetData.map(c=>c.estado||'?'))].filter(s=>s).sort();
-  el.innerHTML='<button class="fb'+(leadsEstadoF==='todos'?' active':'')+'" onclick="filterLeadsEstado(\'todos\',event)">Todos</button>'
-    +states.map(s=>'<button class="fb'+(leadsEstadoF===s?' active':'')+'" onclick="filterLeadsEstado(\''+s+'\',event)">'+s+'</button>').join('');
-}
-function filterLeadsEstado(s,e){leadsEstadoF=s;document.querySelectorAll('#leadsEstadoFilter .fb').forEach(el=>el.classList.remove('active'));if(e&&e.target)e.target.classList.add('active');renderLeadsTable();}
-function renderLeadsTable(){
-  const el=$id('leadsSheetTable');if(!el)return;
-  let list=leadsSheetData;
-  if(leadsEstadoF!=='todos')list=list.filter(c=>(c.estado||'?')===leadsEstadoF);
-  if(!list.length){el.innerHTML='<div class="empty">Nenhum lead encontrado para este estado.</div>';return;}
-  el.innerHTML='<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:.76rem;">'
-    +'<thead><tr style="background:#f5f3ef;">'
-    +'<th style="padding:7px 10px;text-align:left;font-family:\'Libre Baskerville\',serif;font-size:.7rem;color:var(--taupe);letter-spacing:.05em;">NOME</th>'
-    +'<th style="padding:7px 10px;text-align:left;font-family:\'Libre Baskerville\',serif;font-size:.7rem;color:var(--taupe);">ESTADO</th>'
-    +'<th style="padding:7px 10px;text-align:left;font-family:\'Libre Baskerville\',serif;font-size:.7rem;color:var(--taupe);">STATUS</th>'
-    +'<th style="padding:7px 10px;text-align:left;font-family:\'Libre Baskerville\',serif;font-size:.7rem;color:var(--taupe);">ENVIO</th>'
-    +'<th style="padding:7px 10px;"></th>'
-    +'</tr></thead><tbody>'
-    +list.map(c=>'<tr style="border-bottom:1px solid var(--gray);">'
-      +'<td style="padding:8px 10px;font-weight:600;">'+esc(cleanNome(c.nome))+'</td>'
-      +'<td style="padding:8px 10px;"><span class="estado-badge">'+(c.estado||'?')+'</span></td>'
-      +'<td style="padding:8px 10px;color:var(--taupe);">'+(c.status||'—')+'</td>'
-      +'<td style="padding:8px 10px;color:#aaa;">'+(c.sentAt||c.lastContact||'—')+'</td>'
-      +'<td style="padding:8px 10px;"><button class="btn-wa" onclick="window.open(\'https://wa.me/'+c.phone+'\',\'_blank\')" style="padding:4px 8px;font-size:.72rem;">💬</button></td>'
-      +'</tr>').join('')
-    +'</tbody></table></div>';
-}
-
-
-function openSheetsModal(){const m=$id('sheetsModal');if(m)m.classList.add('open');}
-function closeSheetsModal(){const m=$id('sheetsModal');if(m)m.classList.remove('open');}
-
-function confirmSync(){
-  const url=($id('sheetsWebhook').value||'').trim();
-  if(!url){
-    const st=$id('syncStatus');
-    if(st){st.textContent='⚠️ Cole a URL do Google Apps Script antes de enviar.';st.style.color='var(--orange)';}
-    return;
-  }
-  // Monta resumo
-  const total=contacts.length;
-  const enviados=contacts.filter(c=>c.done).length;
-  const int=contacts.filter(c=>c.status==='interessado').length;
-  const ret=contacts.filter(c=>c.status==='retornar').length;
-  const fec=contacts.filter(c=>c.status==='fechado').length;
-  const sumEl=$id('syncSummary');
-  if(sumEl) sumEl.innerHTML=
-    '<strong>'+total+'</strong> leads serão enviados para a aba <strong>CRM</strong><br>'
-    +'<span style="color:var(--taupe);">💰 Interessados: '+int+' &nbsp;·&nbsp; 🔄 Retornar: '+ret+' &nbsp;·&nbsp; 🏆 Fechados: '+fec+'</span><br>'
-    +'<span style="color:var(--taupe);">📤 Disparados: '+enviados+'</span>';
-  const m=$id('syncConfirmModal');if(m)m.classList.add('open');
-}
-
-function closeSyncConfirm(){
-  const m=$id('syncConfirmModal');if(m)m.classList.remove('open');
-}
-
-async function executeSyncSheets(){
-  closeSyncConfirm();
-  const url=($id('sheetsWebhook').value||'').trim();
-  const st=$id('syncStatus');
-  if(!url) return;
-  if(st){st.textContent='🔄 Enviando para a aba CRM...';st.style.color='var(--taupe)';}
-  try{
-    const res=await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({contacts,campaigns})});
-    const data=await res.json();
-    if(data.ok){
-      const msg='✅ Aba CRM atualizada — '+data.added+' novo(s) adicionado(s), '+data.updated+' atualizado(s) · '+new Date().toLocaleTimeString('pt-BR');
-      if(st){st.textContent=msg;st.style.color='var(--green)';}
-      localStorage.setItem('sheetsWebhook',url);
-      toast('✅ CRM do Google Sheets atualizado!');
-    } else {
-      if(st){st.textContent='❌ Erro: '+(data.error||'resposta inválida');st.style.color='var(--red)';}
-    }
-  }catch(ex){
-    if(st){st.textContent='❌ Erro de conexão. Verifique a URL e as permissões do Apps Script.';st.style.color='var(--red)';}
-  }
-}
 
 // ═══ STORAGE ══════════════════════════════════════════════
 function saveStorage(){
