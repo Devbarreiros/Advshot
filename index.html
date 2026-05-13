@@ -1569,7 +1569,61 @@ function loadContacts(){
 }
 function mkC(phone,nome,idx,campaign){return{id:genId(),phone,nome,varIdx:idx,done:false,status:'pendente',sentAt:null,lastContact:null,nextContact:null,fuLevel:0,fuMsgIdx:{1:-1,2:-1,3:-1},campaign:campaign||'default',notes:'',sentHour:null,estado:getEstado(phone),service:'—',history:[]};}
 
-// ═══ BLACKLIST ════════════════════════════════════════════
+// ═══ SUPABASE REST DIRETO (XMLHttpRequest — sem DataCloneError) ═══
+// XHR bypassa completamente o postMessage/structuredClone do Supabase JS
+function sbXHR(method,path,body,extraHeaders){
+  return new Promise((resolve)=>{
+    const xhr=new XMLHttpRequest();
+    xhr.open(method,SB_URL+'/rest/v1/'+path);
+    xhr.setRequestHeader('apikey',SB_KEY);
+    xhr.setRequestHeader('Authorization','Bearer '+SB_KEY);
+    xhr.setRequestHeader('Content-Type','application/json');
+    if(extraHeaders)Object.entries(extraHeaders).forEach(([k,v])=>xhr.setRequestHeader(k,v));
+    xhr.onload=()=>{
+      try{
+        const data=xhr.responseText?JSON.parse(xhr.responseText):null;
+        const cr=xhr.getResponseHeader('content-range');
+        const count=cr?parseInt(cr.split('/')[1]||'0'):0;
+        resolve({data:Array.isArray(data)?data:data?[data]:[],count,ok:xhr.status<300,status:xhr.status});
+      }catch(e){resolve({data:[],count:0,ok:false,error:e.message});}
+    };
+    xhr.onerror=()=>resolve({data:[],count:0,ok:false,error:'Network error'});
+    xhr.send(body?JSON.stringify(body):null);
+  });
+}
+
+async function sbRestGet(table,query={},range=null){
+  try{
+    let path=table+'?select=*';
+    Object.entries(query).forEach(([k,v])=>{
+      if(v!==undefined&&v!==null&&v!=='')path+='&'+encodeURIComponent(k)+'='+encodeURIComponent(String(v));
+    });
+    const headers={'Prefer':'count=exact'};
+    if(range)headers['Range']=range[0]+'-'+range[1];
+    const r=await sbXHR('GET',path,null,headers);
+    return{data:r.data,count:r.count,error:r.ok?null:'HTTP '+r.status};
+  }catch(e){return{data:[],count:0,error:e.message};}
+}
+
+async function sbRestPatch(table,filter,update){
+  try{
+    let path=table+'?';
+    Object.entries(filter).forEach(([k,v])=>{path+=encodeURIComponent(k)+'='+encodeURIComponent(String(v))+'&';});
+    const r=await sbXHR('PATCH',path.replace(/&$/,''),update,{'Prefer':'return=minimal'});
+    return{ok:r.ok};
+  }catch(e){return{ok:false,error:e.message};}
+}
+
+async function sbRestGetDistinct(table,col,filter={}){
+  try{
+    let path=table+'?select='+col+'&limit=5000';
+    Object.entries(filter).forEach(([k,v])=>{
+      if(v!==undefined&&v!==null&&v!=='')path+='&'+encodeURIComponent(k)+'='+encodeURIComponent(String(v));
+    });
+    const r=await sbXHR('GET',path);
+    return[...new Set((r.data||[]).map(row=>row[col]).filter(Boolean))].sort();
+  }catch(e){return[];}
+}
 const BLACKLIST_STATUS=['nao_quer','sem_viabilidade','errado'];
 let _blPendingIdx=-1;
 
@@ -1784,9 +1838,10 @@ function scheduleNext(){
   cdDeadline=Date.now()+(totalSecs*1000);
   setTxt('iHint','🎲 próximo em '+m+' min');
   hideNowArea();
-  // Atualiza display imediatamente — sem esperar o primeiro tick
+  // Força atualização do display — múltiplas tentativas para garantir
   drawCD();
-  // Interval de 500ms — robusto mesmo com throttling do browser
+  requestAnimationFrame(()=>drawCD());
+  setTimeout(()=>drawCD(),100);
   cdInterval=setInterval(cdTick,500);
 }
 
@@ -1799,12 +1854,20 @@ function cdTick(){
     const ni=nextP();
     if(ni===-1){stopAuto();toast('✅ Todos os contatos foram abertos!');return;}
     const ok=openChat(ni);
-    if(ok){scheduleNext();}else{
-      // Popup bloqueado — mostra aviso e agenda próxima tentativa em 5s
-      showNowArea();
-      setTxt('cdStatus','⚠️ Popup bloqueado — clique em Abrir Agora ou');
-      setTxt('cdTxt','aguarde');
-      setTimeout(()=>{if(isAuto&&!isPaused)scheduleNext();},5000);
+    if(ok){
+      scheduleNext();
+    }else{
+      // Popup bloqueado OU lead na blacklist — pula para o próximo
+      contacts[ni].done=true; // marca como processado para não travar
+      saveStorage();
+      setTxt('cdStatus','⚠️ Pulando lead bloqueado, próximo em 3s...');
+      setTimeout(()=>{
+        if(isAuto&&!isPaused){
+          const next=nextP();
+          if(next===-1){stopAuto();toast('✅ Todos concluídos!');return;}
+          scheduleNext();
+        }
+      },3000);
     }
   }
 }
@@ -2497,10 +2560,8 @@ function showUploadArea(){
 
 // ── Filtro de estados (abas) ──────────────────────────────
 async function loadEstadoTabs(){
-  if(!sbClient)return;
-  // Busca estados distintos
-  const{data}=await sbClient.from('contacts').select('sheet_name').eq('source','planilha').not('sheet_name','is',null).limit(1000);
-  lvEstados=[...new Set((data||[]).map(r=>r.sheet_name).filter(Boolean))].sort();
+  // Usa REST direto — sem DataCloneError
+  lvEstados=await sbRestGetDistinct('contacts','estado',{source:'eq.planilha'});
   localStorage.setItem('lv_estados',JSON.stringify(lvEstados));
   renderEstadoTabs();
 }
@@ -2537,22 +2598,26 @@ async function loadLeadsPage(){
   const statusFilter=$id('lvStatusSel')?.value||'all';
   const from=lvPage*LV_PAGE_SIZE, to=from+LV_PAGE_SIZE-1;
 
-  let q=sbClient.from('contacts').select('*',{count:'exact'}).eq('source','planilha');
-  if(lvEstado) q=q.eq('sheet_name',lvEstado);
-  if(statusFilter==='pending') q=q.eq('done',false);
-  if(statusFilter==='sent') q=q.eq('done',true);
-  if(search) q=q.ilike('nome','%'+search+'%');
-  if(tag) q=q.eq('tags',tag);
-  if(cat) q=q.eq('categoria',cat);
-  q=q.order('sheet_name',{ascending:true}).order('done',{ascending:true}).range(from,to);
+  // Usa REST direto — sem DataCloneError
+  const q={source:'eq.planilha'};
+  if(lvEstado)q.estado='eq.'+lvEstado;
+  if(statusFilter==='pending')q.done='eq.false';
+  if(statusFilter==='sent')q.done='eq.true';
+  if(search)q.nome='ilike.*'+search+'*';
+  if(tag)q.tags='eq.'+tag;
+  if(cat)q.categoria='eq.'+cat;
+  q.order='done.asc';
 
-  const{data,count,error}=await q;
-  if(error){if(tbody)tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--red);">❌ Erro ao carregar</td></tr>';return;}
+  const{data,count,error}=await sbRestGet('contacts',q,[from,to]);
+
+  if(error){
+    if(tbody)tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--red);font-size:.78rem;">❌ '+esc(String(error).substring(0,120))+'</td></tr>';
+    return;
+  }
 
   lvTotal=count||0;
   const totalPages=Math.ceil(lvTotal/LV_PAGE_SIZE);
-  const start=from+1, end=Math.min(to+1,lvTotal);
-
+  const start=from+1,end=Math.min(to+1,lvTotal);
   setTxt('lvTotalCount',lvTotal.toLocaleString('pt-BR')+' leads');
   setTxt('lvCount',lvTotal+' leads · '+lvSelected.size+' selecionados');
   setTxt('lvPageInfo',start+'-'+end+' de '+lvTotal);
@@ -2560,23 +2625,11 @@ async function loadLeadsPage(){
   if(pb)pb.disabled=lvPage===0;
   if(nb)nb.disabled=lvPage>=totalPages-1;
 
-  // Atualiza tags e categorias
-  if(lvPage===0&&data){
-    const allTags=[...new Set(data.map(r=>r.tags).filter(Boolean))].sort();
-    const ts=$id('lvTagSel');
-    if(ts){const cur=ts.value;ts.innerHTML='<option value="">Todas as tags</option>'+allTags.map(t=>'<option value="'+esc(t)+'"'+(t===cur?' selected':'')+'>'+esc(t)+'</option>').join('');}
-    // Busca categorias distintas
-    const{data:cats}=await sbClient.from('contacts').select('categoria').eq('source','planilha').not('categoria','is',null);
-    const allCats=[...new Set((cats||[]).map(r=>r.categoria).filter(Boolean))].sort();
-    const cs=$id('lvCategoriaSel');
-    if(cs){const cur=cs.value;cs.innerHTML='<option value="">Categoria</option>'+allCats.map(c=>'<option value="'+esc(c)+'"'+(c===cur?' selected':'')+'>'+esc(c)+'</option>').join('');}
-  }
-
-  if(!data||!data.length){
+  if(!data.length){
     if(tbody)tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:24px;color:#aaa;">Nenhum lead encontrado</td></tr>';
     return;
   }
-  if(tbody)tbody.innerHTML=(data||[]).map(c=>{
+  if(tbody)tbody.innerHTML=data.map(c=>{
     const sel=lvSelected.has(c.id);
     const sent=c.done||/(enviado)/i.test(c.col_e||'');
     return'<tr class="'+(sel?'sel':'')+'" onclick="lvToggle(\''+c.id+'\')" style="cursor:pointer;'+(sent?'opacity:.75;':'')+'">'
@@ -2584,9 +2637,9 @@ async function loadLeadsPage(){
       +'<td style="font-weight:600;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(cleanNome(c.nome))+'</td>'
       +'<td style="font-family:monospace;font-size:.72rem;">'+c.phone+'</td>'
       +'<td style="max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.74rem;color:var(--taupe);">'+esc(c.tags||'—')+'</td>'
-      +'<td><span class="estado-badge">'+esc(c.estado||c.sheet_name||'?')+'</span></td>'
+      +'<td><span class="estado-badge">'+esc(c.estado||'?')+'</span></td>'
       +'<td style="font-size:.7rem;color:var(--taupe);">'+esc(c.categoria||'—')+'</td>'
-      +'<td>'+(sent?'<span class="sent-tag">✅ Enviado</span>'+(c.col_f?'<br><span style="font-size:.65rem;color:#aaa;">'+c.col_f+'</span>':''):'<span style="font-size:.7rem;color:#aaa;">Pendente</span>')+'</td>'
+      +'<td>'+(sent?'<span class="sent-tag">✅ Enviado</span>'+(c.col_f?'<br><span style="font-size:.65rem;color:#aaa;">'+c.col_f+'</span>':''): '<span style="font-size:.7rem;color:#aaa;">Pendente</span>')+'</td>'
       +'</tr>';
   }).join('');
 }
@@ -2958,6 +3011,16 @@ function markXlsxRowSent(sheetName, rowIdx){
   if(_lvMode==='local'&&_parsedLeads.length>0){
     setTimeout(()=>renderLocalLeadsTable(),200);
   }
+}
+
+async function markLeadSentInSupabase(contactId){
+  if(!contactId)return;
+  const now=new Date();
+  const dateStr=now.toLocaleDateString('pt-BR')+' '+now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+  await sbRestPatch('contacts',
+    {'id':'eq.'+contactId},
+    {col_e:'ENVIADO',col_f:dateStr,done:true,sent_at:now.toLocaleString('pt-BR'),sent_hour:now.getHours()}
+  );
 }
 
 // ═══ AVISO DE SAÍDA SEM SALVAR ═══════════════════════════
