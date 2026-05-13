@@ -792,8 +792,9 @@ body,input,select,textarea,.card,.modal,.ci,.crm-card,.stat-box,.fu-card,.tpl-ca
             <button class="btn btn-ghost" style="font-size:.72rem;" onclick="showUploadArea()">➕ Adicionar leads</button>
           </div>
         </div>
-        <div id="lvEstadoTabs" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--gray);">
-          <div style="width:100%;font-size:.72rem;font-weight:700;color:var(--taupe);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">📍 Filtrar por estado:</div>
+        <!-- ⚠️ NÃO REMOVER — filtro por estado essencial para o fluxo diário de disparos -->
+        <div id="lvEstadoTabs" style="margin-bottom:14px;padding-bottom:12px;border-bottom:2px solid var(--gray);">
+          <div style="font-size:.72rem;font-weight:700;color:var(--taupe);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">🗺️ Selecione o estado para disparar hoje:</div>
         </div>
         <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
           <input type="text" id="lvSearch" placeholder="🔍 Buscar por nome ou tag..." oninput="lvSearchDebounce()" style="flex:1;min-width:160px;">
@@ -1281,7 +1282,15 @@ async function loadFromSupabase(){
       sbClient.from('campaigns').select('*'),
       sbClient.from('webhooks').select('*')
     ]);
-    if(ce){console.error('Contacts load error:',ce);throw ce;}
+    if(ce){
+      const msg=ce.message||ce.hint||ce.details||JSON.stringify(ce);
+      console.error('Contacts load error:',msg);
+      // Se for erro de coluna faltando, mostra instrução
+      if(msg.includes('column')||msg.includes('does not exist')){
+        setSyncStatus('⚠️ Colunas faltando no Supabase','Execute o SQL de migração em Settings → SQL Editor');
+      }
+      throw ce;
+    }
     if(c&&c.length>0){
       contacts=c.map(rowToContact);
       console.log('✅ Loaded '+c.length+' CRM contacts from Supabase');
@@ -1310,29 +1319,31 @@ async function syncToSupabase(force){
   sbSyncing=true;
   setSyncDot('#fbbf24','Sincronizando...');
   try{
-    // Contacts
     if(contacts.length){
       const rows=contacts.map(contactToRow);
       const{error:ce}=await sbClient.from('contacts').upsert(rows,{onConflict:'id'});
-      if(ce)console.error('Contacts sync error:',ce);
+      if(ce)console.warn('Contacts sync:',ce.message||ce);
     }
-    // Campaigns
     if(campaigns.length){
       const{error:campe}=await sbClient.from('campaigns').upsert(campaigns,{onConflict:'id'});
-      if(campe)console.error('Campaigns sync error:',campe);
+      if(campe)console.warn('Campaigns sync:',campe.message||campe);
     }
-    // Webhooks
     if(webhooks.length){
       const{error:whe}=await sbClient.from('webhooks').upsert(webhooks,{onConflict:'id'});
-      if(whe)console.error('Webhooks sync error:',whe);
+      if(whe)console.warn('Webhooks sync:',whe.message||whe);
     }
     sbLastSync=new Date().toLocaleTimeString('pt-BR');
     setSyncDot('#4ade80','Sincronizado');
     setSyncStatus('✅ Supabase sincronizado','Último sync: '+sbLastSync+' · '+contacts.length+' leads');
-    console.log('✅ Synced to Supabase at '+sbLastSync);
   }catch(e){
-    console.error('Supabase sync error:',e);
-    setSyncDot('#f87171','Erro ao sincronizar');
+    // DataCloneError e outros erros internos do Supabase — ignora silenciosamente
+    const msg=e.message||'';
+    if(msg.includes('DataClone')||msg.includes('postMessage')){
+      setSyncDot('#fbbf24','Sync pendente');
+    }else{
+      console.warn('Sync error:',msg);
+      setSyncDot('#f87171','Erro ao sincronizar');
+    }
   }
   sbSyncing=false;
 }
@@ -1788,7 +1799,13 @@ function cdTick(){
     const ni=nextP();
     if(ni===-1){stopAuto();toast('✅ Todos os contatos foram abertos!');return;}
     const ok=openChat(ni);
-    if(ok){scheduleNext();}else{showNowArea();}
+    if(ok){scheduleNext();}else{
+      // Popup bloqueado — mostra aviso e agenda próxima tentativa em 5s
+      showNowArea();
+      setTxt('cdStatus','⚠️ Popup bloqueado — clique em Abrir Agora ou');
+      setTxt('cdTxt','aguarde');
+      setTimeout(()=>{if(isAuto&&!isPaused)scheduleNext();},5000);
+    }
   }
 }
 
@@ -2346,14 +2363,19 @@ function renderLocalLeadsTable(){
   const estat=lvEstado;
 
   let list=_parsedLeads;
-  if(estat)list=list.filter(l=>l.sheet_name===estat||l.estado===estat);
+  if(estat)list=list.filter(l=>l.estado===estat||l.sheet_name===estat);
   if(search)list=list.filter(l=>(l.nome||'').toLowerCase().includes(search)||(l.tags||'').toLowerCase().includes(search));
   if(tag)list=list.filter(l=>l.tags===tag);
   if(cat)list=list.filter(l=>l.categoria===cat);
   if(statusF==='pending')list=list.filter(l=>!l.done);
   if(statusF==='sent')list=list.filter(l=>l.done);
 
-  // Paginação
+  // Ordena: pendentes primeiro, depois por aba e ordem original da planilha
+  list=[...list].sort((a,b)=>{
+    if(a.done!==b.done)return a.done?1:-1;
+    if(a.sheet_name!==b.sheet_name)return(a.sheet_name||'').localeCompare(b.sheet_name||'');
+    return(a.rowIdx||0)-(b.rowIdx||0);
+  });
   const total=list.length;
   const from=lvPage*LV_PAGE_SIZE, to=from+LV_PAGE_SIZE;
   const page=list.slice(from,to);
@@ -2367,7 +2389,7 @@ function renderLocalLeadsTable(){
   if(nb)nb.disabled=to>=total;
 
   // Estado tabs com contador pendentes/total
-  const estados=[...new Set(_parsedLeads.map(l=>l.sheet_name||l.estado).filter(Boolean))].sort();
+  const estados=[...new Set(_parsedLeads.map(l=>l.estado||l.sheet_name).filter(Boolean))].sort();
   const tabEl=$id('lvEstadoTabs');
   if(tabEl){
     // Botão "Todos" hardcoded para evitar bugs com emoji no replace
@@ -2382,7 +2404,7 @@ function renderLocalLeadsTable(){
       +'📍 Todos <span style="font-size:.65rem;opacity:.75;">('+pendAll+'/'+totAll+')</span></button>';
 
     const stateBtns=estados.map(e=>{
-      const leads=_parsedLeads.filter(l=>l.sheet_name===e||l.estado===e);
+      const leads=_parsedLeads.filter(l=>l.estado===e||l.sheet_name===e);
       const pend=leads.filter(l=>!l.done).length;
       const tot=leads.length;
       const active=lvEstado===e;
@@ -2395,8 +2417,10 @@ function renderLocalLeadsTable(){
     });
 
     // Preserva o label "Filtrar por estado:" no início
-    tabEl.innerHTML='<div style="width:100%;font-size:.72rem;font-weight:700;color:var(--taupe);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">📍 Filtrar por estado:</div>'
-      +[allBtn,...stateBtns].join('');
+    tabEl.innerHTML='<div style="font-size:.72rem;font-weight:700;color:var(--taupe);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">🗺️ Selecione o estado para disparar hoje:</div>'
+      +'<div style="display:flex;flex-wrap:wrap;gap:6px;">'
+      +[allBtn,...stateBtns].join('')
+      +'</div>';
   }
 
   // Tags
@@ -2519,7 +2543,7 @@ async function loadLeadsPage(){
   if(search) q=q.ilike('nome','%'+search+'%');
   if(tag) q=q.eq('tags',tag);
   if(cat) q=q.eq('categoria',cat);
-  q=q.order('nome').range(from,to);
+  q=q.order('sheet_name',{ascending:true}).order('done',{ascending:true}).range(from,to);
 
   const{data,count,error}=await q;
   if(error){if(tbody)tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--red);">❌ Erro ao carregar</td></tr>';return;}
@@ -2796,6 +2820,10 @@ function _doParseAsync(arrBuf){
         return cell?String(cell.v||'').trim():'';
       };
 
+      const estadoRaw=gV(3); // coluna D
+      // Fallback: detecta pelo DDD do telefone se coluna D vazia
+      const estadoFinal=estadoRaw||getEstado(phone)||shName;
+
       const colE=gV(4);
       const alreadySent=colE.length>0&&/(enviado|sent)/i.test(colE);
 
@@ -2804,7 +2832,7 @@ function _doParseAsync(arrBuf){
         phone,
         nome:gV(0)||phone,
         tags:gV(2),
-        estado:gV(3)||shName,
+        estado:estadoFinal,
         col_e:colE,
         col_f:gV(5),
         sheet_name:shName,
@@ -2873,11 +2901,24 @@ function markXlsxRowSent(sheetName, rowIdx){
   const dateStr=now.toLocaleDateString('pt-BR')+' '+now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
 
   // ── 1. Atualiza _parsedLeads em memória (sempre, independente do xlsx) ──
+  let updatedPhone=null;
   if(_parsedLeads.length>0){
     const lead=_parsedLeads.find(l=>
       (l.sheet_name===sheetName||(l.rowIdx===rowIdx&&!sheetName))&&l.rowIdx===rowIdx
     );
-    if(lead){lead.done=true;lead.col_e='ENVIADO';lead.col_f=dateStr;}
+    if(lead){
+      lead.done=true;lead.col_e='ENVIADO';lead.col_f=dateStr;
+      updatedPhone=lead.phone;
+    }
+  }
+
+  // ── 2. Salva no Supabase em background (persiste para próxima sessão) ──
+  if(sbClient&&updatedPhone){
+    sbClient.from('contacts')
+      .update({done:true,col_e:'ENVIADO',col_f:dateStr,sent_at:dateStr})
+      .eq('phone',updatedPhone)
+      .eq('source','planilha')
+      .then(({error})=>{if(error)console.warn('Supabase update:',error);});
   }
 
   // ── 2. Atualiza o arquivo xlsx em memória (requer importWB e XLSX) ──
