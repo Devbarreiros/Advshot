@@ -809,6 +809,7 @@ body,input,select,textarea,.card,.modal,.ci,.crm-card,.stat-box,.fu-card,.tpl-ca
         <div class="import-top-actions">
           <div class="import-count" id="lvCount"></div>
           <button class="btn btn-ghost" style="font-size:.73rem;" onclick="lvSelectAllPage()">☑️ Selec. página</button>
+          <button class="btn btn-ghost" style="font-size:.73rem;" onclick="lvSelectNext(5)" title="Seleciona os próximos 5 pendentes">☑️ Próximos 5</button>
           <button class="btn btn-ghost" style="font-size:.73rem;" onclick="lvClearSel()">□ Limpar</button>
         </div>
         <div class="import-table-wrap">
@@ -1838,11 +1839,17 @@ function scheduleNext(){
   cdDeadline=Date.now()+(totalSecs*1000);
   setTxt('iHint','🎲 próximo em '+m+' min');
   hideNowArea();
-  // Força atualização do display — múltiplas tentativas para garantir
-  drawCD();
-  requestAnimationFrame(()=>drawCD());
-  setTimeout(()=>drawCD(),100);
-  cdInterval=setInterval(cdTick,500);
+  setTxt('cdStatus','Próximo em:');
+  // Atualiza display imediatamente
+  const mm=String(Math.floor(secsLeft/60)).padStart(2,'0');
+  const ss=String(secsLeft%60).padStart(2,'0');
+  setTxt('cdTxt',mm+':'+ss);
+  const fill=$id('cdFill');
+  if(fill)fill.style.width='100%';
+  // Inicia contagem
+  cdInterval=setInterval(cdTick,1000);
+  // Backup: garante que display atualiza mesmo se DOM ainda não estava pronto
+  setTimeout(drawCD,100);
 }
 
 function cdTick(){
@@ -2113,7 +2120,8 @@ async function aiSuggest(i){
   }catch(e){box.innerHTML='<strong>✨ IA:</strong> Erro.';}
 }
 function renderFU(){
-  const elig=contacts.filter(c=>c.done&&!['nao_quer','errado','fechado','sem_viabilidade'].includes(c.status));
+  // Follow-up apenas para contatos com status "retornar" ou "fechado"
+  const elig=contacts.filter(c=>c.done&&['retornar','fechado'].includes(c.status));
   renderFuEstadoFilter(elig);
   let list=elig;
   if(fuF!=='todos')list=list.filter(c=>String(c.fuLevel===0?1:Math.min(c.fuLevel+1,3))===fuF);
@@ -2672,6 +2680,23 @@ function lvSelectAllPage(){
   }
   setTxt('lvSelCount',lvSelected.size);
 }
+function lvSelectNext(n){
+  // Seleciona os próximos N leads pendentes (não enviados)
+  const list=(_lvMode==='local'?_lvLocalFiltered||_parsedLeads:[]);
+  let added=0;
+  for(const lead of list){
+    if(added>=n)break;
+    if(!lead.done&&!lvSelected.has('local_'+lead.phone)){
+      lvSelected.add('local_'+lead.phone);
+      added++;
+    }
+  }
+  setTxt('lvSelCount',lvSelected.size);
+  if(_lvMode==='local')renderLocalLeadsTable();
+  else loadLeadsPage();
+  toast('☑️ '+added+' leads selecionados');
+}
+
 function lvClearSel(){
   lvSelected.clear();
   document.querySelectorAll('#lvTableBody .import-chk.on').forEach(chk=>{
