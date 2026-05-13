@@ -2370,6 +2370,7 @@ function renderLocalLeadsTable(){
   if(statusF==='pending')list=list.filter(l=>!l.done);
   if(statusF==='sent')list=list.filter(l=>l.done);
 
+  // ⚠️ NÃO REMOVER — filtro por estado essencial para o fluxo diário
   // Ordena: pendentes primeiro, depois por aba e ordem original da planilha
   list=[...list].sort((a,b)=>{
     if(a.done!==b.done)return a.done?1:-1;
