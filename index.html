@@ -483,6 +483,7 @@ body,input,select,textarea,.card,.modal,.ci,.crm-card,.stat-box,.fu-card,.tpl-ca
   </div>
   <!-- CONTADOR DIÁRIO -->
   <div id="dailyCounter"></div>
+  <div id="banGuard"></div>
 
   <div class="card">
     <div class="card-title">📋 Contatos <span class="saudacao-badge" id="saudacaoLive"></span></div>
@@ -1637,6 +1638,8 @@ function blForceOpen(){
 }
 
 function _doOpenChat(i){
+  // Anti-Ban Guard — se der erro na verificação, ignora e deixa disparar
+  try{if(!canSendByBanGuard())return false;}catch(e){console.warn('banGuard error:',e);}
   const w=window.open(buildUrl(contacts[i]),'_blank');
   if(!w||w.closed||typeof w.closed==='undefined'){
     setDisplay('popupWarn','block');return false;
@@ -1655,7 +1658,8 @@ function _doOpenChat(i){
   }
   // Marca como enviado no Supabase (para leads vindos do viewer)
   if(contacts[i].id) markLeadSentInSupabase(contacts[i].id);
-  saveStorage();renderDisp();renderHome();
+  recordSendEvent(contacts[i]);
+  saveStorage();renderDisp();renderHome();renderBanGuard();
   return true;
 }
 
@@ -2230,7 +2234,7 @@ function incrementDailySent(){
 function renderDailyCounter(){
   const el=$id('dailyCounter');if(!el)return;
   const n=getDailySent();
-  const limit=80;
+  const limit=(()=>{try{return getCurrentDailyLimit();}catch(e){return 80;}})();
   const pct=Math.min(100,Math.round(n/limit*100));
   const cls=n>=limit?'danger':n>=60?'warn':'';
   const msg=n>=limit
@@ -2411,7 +2415,7 @@ function useTpl(key){
     VARS[0]=t.msg;
   }
 }
-function renderAll(){renderHome();renderDailyCounter();if(contacts.length){setDisplay('listSection','block');renderDisp();}}
+function renderAll(){renderHome();renderDailyCounter();try{renderBanGuard();}catch(e){}if(contacts.length){setDisplay('listSection','block');renderDisp();}}
 
 // ═══ IMPORTAR PLANILHA / LEADS VIEWER ════════════════════
 // Estrutura fixa: A=Nome B=WhatsApp C=Tags D=Estado E=Enviado F=Data
@@ -3047,6 +3051,70 @@ async function markLeadSentInSupabase(contactId){
     {col_e:'ENVIADO',col_f:dateStr,done:true,sent_at:now.toLocaleString('pt-BR'),sent_hour:now.getHours()}
   );
 }
+
+// ═══ ANTI-BAN GUARD ═══════════════════════════════════════
+const BAN_GUARD_KEY='advshot_ban_guard';
+const SEND_LOG_KEY='advshot_send_log';
+const NORMAL_DAILY_LIMIT=80,RECOVERY_DAILY_LIMIT=20;
+const NORMAL_HOURLY_LIMIT=12,RECOVERY_HOURLY_LIMIT=5;
+const RECOVERY_HOURS_AFTER_BAN=72;
+function getBanGuardState(){try{return JSON.parse(localStorage.getItem(BAN_GUARD_KEY)||'{}');}catch(e){return{};}}
+function saveBanGuardState(s){localStorage.setItem(BAN_GUARD_KEY,JSON.stringify(s||{}));}
+function getSendLog(){try{const c=Date.now()-7*864e5;return JSON.parse(localStorage.getItem(SEND_LOG_KEY)||'[]').filter(i=>i&&i.timestamp>=c);}catch(e){return[];}}
+function saveSendLog(l){localStorage.setItem(SEND_LOG_KEY,JSON.stringify(l||[]));}
+function recordSendEvent(contact){const l=getSendLog();l.push({timestamp:Date.now(),day:today(),hour:new Date().getHours(),phone:contact?.phone||'',estado:contact?.estado||''});saveSendLog(l);}
+function getHourlySentCount(){return getSendLog().filter(i=>i.timestamp>=Date.now()-36e5).length;}
+function getLastSendMinutesAgo(){const l=getSendLog();if(!l.length)return null;return Math.floor((Date.now()-l.sort((a,b)=>b.timestamp-a.timestamp)[0].timestamp)/60000);}
+function isBanLocked(){const s=getBanGuardState();return s.lockedUntil&&Date.now()<s.lockedUntil;}
+function isRecoveryMode(){const s=getBanGuardState();if(isBanLocked())return false;return s.recoveryUntil&&Date.now()<s.recoveryUntil;}
+function getCurrentDailyLimit(){if(isBanLocked())return 0;if(isRecoveryMode())return RECOVERY_DAILY_LIMIT;return NORMAL_DAILY_LIMIT;}
+function getCurrentHourlyLimit(){if(isBanLocked())return 0;if(isRecoveryMode())return RECOVERY_HOURLY_LIMIT;return NORMAL_HOURLY_LIMIT;}
+function formatRemainingTime(ms){if(ms<=0)return'liberado';const t=Math.ceil(ms/60000),h=Math.floor(t/60),m=t%60;return h<=0?m+'min':h+'h '+m+'min';}
+function reportWhatsAppBan(hours){hours=hours||24;const lu=Date.now()+hours*36e5,ru=lu+RECOVERY_HOURS_AFTER_BAN*36e5;saveBanGuardState({reportedAt:Date.now(),lockedUntil:lu,recoveryUntil:ru,reason:'ban'});if(isAuto)stopAuto();renderBanGuard();renderDailyCounter();toast('🚫 Banimento registrado. Bloqueado por '+hours+'h.',5000);}
+function clearBanGuardLock(){const s=getBanGuardState();saveBanGuardState({...s,lockedUntil:null,recoveryUntil:Date.now()+RECOVERY_HOURS_AFTER_BAN*36e5,releasedAt:Date.now()});renderBanGuard();renderDailyCounter();toast('🟡 Bloqueio encerrado. Modo recuperação ativado.',4000);}
+function activateSafeMode(){saveBanGuardState({...getBanGuardState(),recoveryUntil:Date.now()+RECOVERY_HOURS_AFTER_BAN*36e5,safeModeAt:Date.now()});if(isAuto)stopAuto();renderBanGuard();renderDailyCounter();toast('🟡 Modo seguro ativado por 72h.',4000);}
+function getBanRiskLevel(){
+  const ds=getDailySent(),hs=getHourlySentCount(),dl=getCurrentDailyLimit(),hl=getCurrentHourlyLimit(),lm=getLastSendMinutesAgo();
+  if(isBanLocked())return{level:'locked',label:'Bloqueado',color:'#ef4444',msg:'Conta em bloqueio. Não envie mensagens.'};
+  if(isRecoveryMode())return{level:'recovery',label:'Recuperação',color:'#f97316',msg:'Modo recuperação. Use poucos disparos.'};
+  if(ds>=dl||hs>=hl)return{level:'critical',label:'Crítico',color:'#ef4444',msg:'Pare agora. Limite de segurança atingido.'};
+  if(ds>=50||hs>=9)return{level:'high',label:'Alto',color:'#ef4444',msg:'Risco alto. Pause por algumas horas.'};
+  if(ds>=30||hs>=6||(lm!==null&&lm<3))return{level:'medium',label:'Médio',color:'#f97316',msg:'Reduza o ritmo. Aumente o intervalo.'};
+  return{level:'low',label:'Baixo',color:'#22c55e',msg:'Ritmo seguro. Continue com cautela.'};
+}
+function canSendByBanGuard(){
+  const s=getBanGuardState();
+  if(isBanLocked()){toast('🚫 Bloqueado. Aguarde '+formatRemainingTime(s.lockedUntil-Date.now())+'.',5000);if(isAuto)stopAuto();renderBanGuard();return false;}
+  const ds=getDailySent(),hs=getHourlySentCount();
+  if(ds>=getCurrentDailyLimit()){toast('⛔ Limite diário atingido.',5000);if(isAuto)stopAuto();renderBanGuard();return false;}
+  if(hs>=getCurrentHourlyLimit()){toast('⛔ Limite por hora atingido. Pause.',5000);if(isAuto)stopAuto();renderBanGuard();return false;}
+  return true;
+}
+function renderBanGuard(){
+  const el=$id('banGuard');if(!el)return;
+  const s=getBanGuardState(),risk=getBanRiskLevel();
+  const ds=getDailySent(),hs=getHourlySentCount(),dl=getCurrentDailyLimit(),hl=getCurrentHourlyLimit();
+  if(risk.level==='low'){el.innerHTML='';return;}
+  let extra='';
+  if(isBanLocked())extra='<div style="font-size:.74rem;color:#ef4444;margin-top:4px;font-weight:700;">⏳ '+formatRemainingTime(s.lockedUntil-Date.now())+' restantes</div>';
+  else if(isRecoveryMode())extra='<div style="font-size:.74rem;color:#f97316;margin-top:4px;font-weight:700;">🟡 Recuperação: '+formatRemainingTime(s.recoveryUntil-Date.now())+'</div>';
+  el.innerHTML='<div class="card" style="border:2px solid '+risk.color+';margin-bottom:10px;">'
+    +'<div class="card-title">🛡️ Anti-Ban Guard</div>'
+    +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">'
+    +'<div style="width:10px;height:10px;border-radius:50%;background:'+risk.color+';flex-shrink:0;"></div>'
+    +'<div><div style="font-size:.84rem;font-weight:700;color:'+risk.color+';">'+risk.label+'</div>'
+    +'<div style="font-size:.74rem;color:var(--taupe);">'+risk.msg+'</div>'+extra+'</div></div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:8px 0;">'
+    +'<div style="background:var(--white);border:1px solid var(--gray);border-radius:8px;padding:8px;text-align:center;"><div style="font-size:.65rem;color:var(--taupe);text-transform:uppercase;">Hoje</div><div style="font-size:1rem;font-weight:700;">'+ds+'/'+dl+'</div></div>'
+    +'<div style="background:var(--white);border:1px solid var(--gray);border-radius:8px;padding:8px;text-align:center;"><div style="font-size:.65rem;color:var(--taupe);text-transform:uppercase;">Última hora</div><div style="font-size:1rem;font-weight:700;">'+hs+'/'+hl+'</div></div>'
+    +'</div>'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap;">'
+    +'<button class="btn btn-red" style="font-size:.72rem;" onclick="reportWhatsAppBan(24)">🚫 Fui banido 24h</button>'
+    +'<button class="btn" style="font-size:.72rem;background:#f97316;color:#fff;border:none;border-radius:8px;padding:6px 12px;cursor:pointer;" onclick="activateSafeMode()">🟡 Modo seguro</button>'
+    +(isBanLocked()?'<button class="btn btn-ghost" style="font-size:.72rem;" onclick="clearBanGuardLock()">✅ Já voltou</button>':'')
+    +'</div></div>';
+}
+setInterval(renderBanGuard,60000);
 
 // ═══ AVISO DE SAÍDA SEM SALVAR ═══════════════════════════
 let _xlsxModified=false;
