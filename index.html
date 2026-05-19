@@ -2813,24 +2813,41 @@ async function initLeadsViewer(){
     renderLocalLeadsTable();
     return;
   }
+
+  // Mostra upload card por padrão enquanto verifica
+  setDisplay('importUploadCard','block');
+  setDisplay('leadsViewerCard','none');
+
   if(!sbClient){
-    setDisplay('importUploadCard','block');
-    setDisplay('leadsViewerCard','none');
     const el=$id('importSbStatus');
     if(el)el.innerHTML='<div style="background:#fdf2f2;border:1px solid #f5c6c6;border-radius:8px;padding:10px;font-size:.76rem;color:var(--red);">❌ Supabase não conectado.</div>';
     return;
   }
-  const{count}=await sbClient.from('contacts').select('*',{count:'exact',head:true}).eq('source','planilha');
-  if(count&&count>0){
-    setDisplay('importUploadCard','none');
-    setDisplay('leadsViewerCard','block');
-    await loadEstadoTabs();
-    await loadLeadsPage();
-  }else{
-    setDisplay('importUploadCard','block');
-    setDisplay('leadsViewerCard','none');
+
+  // Usa XHR para contar leads — sem DataCloneError
+  try{
+    const{data,count,error}=await sbRestGet('contacts',{source:'eq.planilha',done:'eq.false'},[0,0]);
+    const total=count||0;
+
+    if(!error&&total>0){
+      // Tem leads no Supabase — mostra viewer
+      setDisplay('importUploadCard','none');
+      setDisplay('leadsViewerCard','block');
+      await loadEstadoTabs();
+      await loadLeadsPage();
+    }else{
+      // Sem leads ou erro — mostra upload card com status
+      const el=$id('importSbStatus');
+      if(error){
+        if(el)el.innerHTML='<div style="background:#fff8e1;border:1px solid #ffc107;border-radius:8px;padding:10px;font-size:.76rem;color:#856404;">⚠️ '+esc(String(error).substring(0,100))+'<br>Verifique o SQL de migração no Supabase.</div>';
+      }else{
+        if(el)el.innerHTML='<div style="background:#e8f5e9;border:1px solid #a7d7ad;border-radius:8px;padding:10px;font-size:.76rem;color:#15803d;">✅ Supabase conectado. Faça o upload da sua planilha abaixo.</div>';
+      }
+    }
+  }catch(e){
+    // Em caso de erro total, sempre mostra upload card
     const el=$id('importSbStatus');
-    if(el)el.innerHTML='<div style="background:#e8f5e9;border:1px solid #a7d7ad;border-radius:8px;padding:10px;font-size:.76rem;color:#15803d;">✅ Supabase conectado. Faça o upload da sua planilha uma única vez abaixo.</div>';
+    if(el)el.innerHTML='<div style="background:#e8f5e9;border:1px solid #a7d7ad;border-radius:8px;padding:10px;font-size:.76rem;color:#15803d;">✅ Supabase conectado. Faça o upload da sua planilha abaixo.</div>';
   }
 }
 
