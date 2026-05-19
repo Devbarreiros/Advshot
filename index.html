@@ -484,6 +484,7 @@ body,input,select,textarea,.card,.modal,.ci,.crm-card,.stat-box,.fu-card,.tpl-ca
   <!-- CONTADOR DIÁRIO -->
   <div id="dailyCounter"></div>
   <div id="banGuard"></div>
+  <div id="dispResumeBanner" style="display:none;margin-bottom:10px;"></div>
 
   <div class="card">
     <div class="card-title">📋 Contatos <span class="saudacao-badge" id="saudacaoLive"></span></div>
@@ -554,6 +555,11 @@ body,input,select,textarea,.card,.modal,.ci,.crm-card,.stat-box,.fu-card,.tpl-ca
       </div>
       <div class="info-box">⚠️ O WhatsApp abre com a mensagem preenchida — é só clicar Enviar!</div>
       <button class="btn btn-ghost" style="width:100%;font-size:.78rem;margin-bottom:8px;" id="btnHideSent" onclick="toggleHideSent()">🙈 Ocultar enviados</button>
+      <div style="margin-bottom:8px;position:relative;">
+        <input type="text" id="dispSearch" placeholder="🔍 Buscar lead por nome..." oninput="renderDisp()"
+          style="width:100%;padding:8px 12px;border:1px solid var(--gray);border-radius:8px;font-size:.78rem;background:var(--white);color:var(--black);box-sizing:border-box;">
+        <button onclick="$id('dispSearch').value='';renderDisp()" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:#aaa;cursor:pointer;font-size:.9rem;">✕</button>
+      </div>
       <div id="contactList"></div>
     </div>
   </div>
@@ -645,7 +651,7 @@ body,input,select,textarea,.card,.modal,.ci,.crm-card,.stat-box,.fu-card,.tpl-ca
 
 <!-- DASHBOARD -->
 <div class="page" id="page-dash">
-  <div class="card"><div class="card-title">🔽 Funil de Vendas</div><div class="funnel" id="funnelChart"></div></div>
+  <div class="card"><div id="responseRateCard"></div><div class="card-title">🔽 Funil de Vendas</div><div class="funnel" id="funnelChart"></div></div>
   <div class="card"><div class="card-title">📍 Taxa de Resposta por Estado</div><p style="font-size:.76rem;color:#aaa;margin-bottom:10px;">Percentual de leads que responderam ou avançaram em cada estado</p><div id="stateChart"></div></div>
   <div class="card"><div class="card-title">⏰ Melhor Horário</div><p style="font-size:.76rem;color:#aaa;margin-bottom:10px;">Baseado nos horários dos envios</p><div class="chart-bar-wrap" id="timeChart"></div></div>
   <div class="card"><div class="card-title">🔥 Leads Mais Quentes</div><div id="hotLeads"></div></div>
@@ -1278,39 +1284,62 @@ async function loadFromSupabase(){
   try{
     setSyncDot('#fbbf24','Carregando...');
     setSyncStatus('🔄 Carregando dados do Supabase...','Aguarde um momento');
-    const [{data:c,error:ce},{data:camp,error:campe},{data:wh,error:whe}]=await Promise.all([
-      // ✅ Filtra APENAS contatos do CRM — exclui leads da planilha
-      sbClient.from('contacts').select('*').neq('source','planilha').order('created_at',{ascending:true}),
-      sbClient.from('campaigns').select('*'),
-      sbClient.from('webhooks').select('*')
+
+    // Usa XHR direto — sem DataCloneError
+    const [crmRes,campRes,whRes]=await Promise.all([
+      sbRestGet('contacts',{source:'neq.planilha',order:'created_at.asc'},[0,4999]),
+      sbRestGet('campaigns',{},[0,999]),
+      sbRestGet('webhooks',{},[0,99])
     ]);
-    if(ce){
-      const msg=ce.message||ce.hint||ce.details||JSON.stringify(ce);
-      console.error('Contacts load error:',msg);
-      // Se for erro de coluna faltando, mostra instrução
-      if(msg.includes('column')||msg.includes('does not exist')){
-        setSyncStatus('⚠️ Colunas faltando no Supabase','Execute o SQL de migração em Settings → SQL Editor');
-      }
-      throw ce;
+
+    if(crmRes.error){
+      console.error('Contacts load error:',crmRes.error);
+      setSyncStatus('⚠️ Usando dados locais','Execute o SQL de migração no Supabase → SQL Editor');
+      setSyncDot('#f97316','Erro parcial');
+      return false;
     }
-    if(c&&c.length>0){
-      contacts=c.map(rowToContact);
-      console.log('✅ Loaded '+c.length+' CRM contacts from Supabase');
-    } else if(contacts.length>0){
-      console.log('Supabase empty, uploading local data...');
-      await syncToSupabase(true);
+
+    const cData=crmRes.data||[];
+    const campData=campRes.data||[];
+    const whData=whRes.data||[];
+
+    if(cData.length>0){
+      contacts=cData.map(row=>({
+        id:row.id,phone:row.phone,nome:row.nome||row.phone,
+        estado:row.estado||getEstado(row.phone),
+        status:row.status||'pendente',notes:row.notes||'',
+        lastContact:row.last_contact||row.lastContact||'',
+        nextContact:row.next_contact||row.nextContact||'',
+        service:row.service||row.tags||'—',tags:row.tags||'',
+        done:row.done||false,campaign:row.campaign||'default',
+        fuLevel:row.fu_level||0,varIdx:row.var_idx||0,
+        fuMsgIdx:row.fu_msg_idx||{1:-1,2:-1,3:-1},
+        fuResp:row.fu_resp||null,
+        sentAt:row.sent_at||null,
+        sentHour:row.sent_hour||null,
+        history:Array.isArray(row.history)?row.history:(row.history?[]:[]),
+        source:row.source||'crm',
+        col_e:row.col_e||'',col_f:row.col_f||'',
+        categoria:row.categoria||'',sheet_name:row.sheet_name||''
+      }));
     }
-    if(camp&&camp.length>0)campaigns=camp;
-    if(wh&&wh.length>0)webhooks=wh;
-    const total=contacts.length;
-    setSyncDot('#4ade80','Sincronizado');
-    setSyncStatus('✅ Supabase conectado',total+' contatos CRM · '+(sbLastSync?'Última sync: '+sbLastSync:''));
+    if(campData.length>0)campaigns=campData;
+    if(whData.length>0)webhooks=whData;
+
+    saveStorage();
     sbLastSync=new Date().toLocaleTimeString('pt-BR');
+    setSyncDot('#4ade80','Sincronizado');
+    setSyncStatus('✅ Supabase sincronizado','Último sync: '+sbLastSync+' · '+contacts.length+' leads');
     return true;
   }catch(e){
-    console.error('Supabase load error:',e);
-    setSyncDot('#f87171','Erro de conexão');
-    setSyncStatus('⚠️ Usando dados locais',e.message||'Sem conexão com o Supabase');
+    const msg=e.message||'';
+    if(msg.includes('DataClone')||msg.includes('postMessage')){
+      setSyncStatus('⚠️ Usando dados locais','Erro interno do browser (DataClone) — dados locais preservados');
+      setSyncDot('#f97316','Aviso');
+    }else{
+      console.warn('Supabase load error:',msg);
+      setSyncDot('#f87171','Erro ao carregar');
+    }
     return false;
   }
 }
@@ -1464,6 +1493,7 @@ function goTo(p){
   if(p==='dash')renderDash();
   if(p==='camp')renderCamps();
   if(p==='home')renderHome();
+  if(p==='disp'){renderDailyCounter();try{renderBanGuard();checkDispStateOnLoad();}catch(e){}}
   if(p==='leads')initLeadsViewer();
   if(p==='conexoes'){renderWebhooks();renderPullSelect();renderLeadsSheetSelect();}
 }
@@ -1638,8 +1668,7 @@ function blForceOpen(){
 }
 
 function _doOpenChat(i){
-  // Anti-Ban Guard — se der erro na verificação, ignora e deixa disparar
-  try{if(!canSendByBanGuard())return false;}catch(e){console.warn('banGuard error:',e);}
+  if(!canSendByBanGuard())return false;
   const w=window.open(buildUrl(contacts[i]),'_blank');
   if(!w||w.closed||typeof w.closed==='undefined'){
     setDisplay('popupWarn','block');return false;
@@ -1660,6 +1689,7 @@ function _doOpenChat(i){
   if(contacts[i].id) markLeadSentInSupabase(contacts[i].id);
   recordSendEvent(contacts[i]);
   saveStorage();renderDisp();renderHome();renderBanGuard();
+  try{saveDispState();}catch(e){} // salva estado para retomada
   return true;
 }
 
@@ -1862,6 +1892,7 @@ function cdTick(){
   drawCD();
   if(secsLeft<=0){
     clearInterval(cdInterval);
+    playTimerEnd(); // 🔔 notificação sonora
     const ni=nextP();
     if(ni===-1){stopAuto();toast('✅ Todos os contatos foram abertos!');return;}
     const ok=openChat(ni);
@@ -1981,11 +2012,19 @@ function renderDisp(){
   setTxt('tot',contacts.length);setTxt('sent',done);setTxt('left',contacts.length-done);
   const pf=$id('pFill');if(pf)pf.style.width=(contacts.length?done/contacts.length*100:0)+'%';
   const ni=isAuto?nextP():-1;
+  const srch=($id('dispSearch')?.value||'').toLowerCase().trim();
   const list=$id('contactList');if(!list)return;
   list.innerHTML=contacts.map((c,i)=>{
     if(hideSent&&c.done)return'';
-    return'<div class="ci '+(c.done?'done ':'')+( i===ni?'active-item':'')+'">'
-      +'<span class="idx">'+(i+1)+'</span>'
+    if(srch&&!c.nome.toLowerCase().includes(srch)&&!c.phone.includes(srch))return'';
+    return'<div class="ci '+(c.done?'done ':'')+( i===ni?'active-item':'')+'" '
+      +'draggable="true" '
+      +'ondragstart="dispDragStart('+i+')" '
+      +'ondragover="dispDragOver(event,'+i+')" '
+      +'ondrop="dispDrop(event,'+i+')" '
+      +'ondragleave="this.style.borderTop=\'\'" '
+      +'style="'+(c.done?'opacity:.75;':'')+'cursor:grab;">'
+      +'<span class="idx" style="cursor:grab;color:#aaa;font-size:.7rem;">⠿ '+(i+1)+'</span>'
       +'<div class="ci-info">'
         +'<div class="ci-name '+(c.done?'s':'')+'">'+esc(c.nome)+' <span class="estado-badge">'+(c.estado||'?')+'</span>'+(i===ni?'<span style="font-size:.62rem;background:var(--taupe);color:#fff;padding:1px 5px;border-radius:99px;margin-left:4px;">próximo</span>':'')+'</div>'
         +'<div class="ci-sub">💬 '+esc(getMsg(c.nome,c.varIdx))+'</div>'
@@ -1998,6 +2037,23 @@ function renderDisp(){
       +'<div class="chk '+(c.done?'on':'')+'" onclick="toggleDone('+i+')">'+(c.done?'✓':'')+'</div>'
     +'</div>';
   }).join('');
+}
+let _dragFromIdx=null;
+function dispDragStart(i){_dragFromIdx=i;}
+function dispDragOver(e,i){
+  e.preventDefault();
+  // Visual hint
+  const el=e.currentTarget;
+  el.style.borderTop='2px solid var(--taupe)';
+}
+function dispDrop(e,i){
+  e.preventDefault();
+  document.querySelectorAll('.ci').forEach(el=>el.style.borderTop='');
+  if(_dragFromIdx===null||_dragFromIdx===i)return;
+  const moved=contacts.splice(_dragFromIdx,1)[0];
+  contacts.splice(i,0,moved);
+  _dragFromIdx=null;
+  saveStorage();renderDisp();
 }
 
 // ═══ CRM ══════════════════════════════════════════════════
@@ -2188,11 +2244,50 @@ function renderDash(){
     }
   }
 
+  // ── Taxa de resposta real ────────────────────────────────
+  const rateEl=$id('responseRateCard');
+  if(rateEl){
+    const totalSent=contacts.filter(c=>c.done).length;
+    const totalResp=contacts.filter(c=>['respondeu','interessado','fechado','retornar'].includes(c.status)).length;
+    const rate=totalSent>0?Math.round(totalResp/totalSent*100):0;
+    const color=rate>=20?'#16a34a':rate>=10?'#d97706':'#dc2626';
+    rateEl.innerHTML='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px;">'
+      +'<div style="text-align:center;padding:10px;background:var(--white);border-radius:8px;border:1px solid var(--gray);">'
+      +'<div style="font-size:1.4rem;font-weight:700;">'+totalSent+'</div><div style="font-size:.68rem;color:var(--taupe);text-transform:uppercase;">Enviados</div></div>'
+      +'<div style="text-align:center;padding:10px;background:var(--white);border-radius:8px;border:1px solid var(--gray);">'
+      +'<div style="font-size:1.4rem;font-weight:700;color:'+color+'">'+rate+'%</div><div style="font-size:.68rem;color:var(--taupe);text-transform:uppercase;">Taxa resposta</div></div>'
+      +'<div style="text-align:center;padding:10px;background:var(--white);border-radius:8px;border:1px solid var(--gray);">'
+      +'<div style="font-size:1.4rem;font-weight:700;color:#d97706">'+totalResp+'</div><div style="font-size:.68rem;color:var(--taupe);text-transform:uppercase;">Responderam</div></div>'
+      +'</div>';
+  }
+
+  // ── Melhor horário (baseado no sendLog) ──────────────────
   const hours=Array(24).fill(0);
-  contacts.filter(c=>c.sentHour!=null).forEach(c=>hours[c.sentHour]++);
+  // Usa sendLog para contagem mais precisa
+  const log=getSendLog();
+  log.forEach(e=>{if(e.hour!=null)hours[e.hour]++;});
+  // Fallback: usa contacts se sendLog vazio
+  if(!log.length)contacts.filter(c=>c.sentHour!=null).forEach(c=>hours[c.sentHour]++);
   const mxH=Math.max(...hours,1);
+  const bestHour=hours.indexOf(Math.max(...hours));
   const tc=$id('timeChart');
-  if(tc)tc.innerHTML=[8,9,10,11,12,13,14,15,16,17,18,19].map(h=>'<div class="chart-row"><div class="chart-lbl">'+h+'h</div><div class="chart-bar"><div class="chart-fill" style="width:'+Math.round(hours[h]/mxH*100)+'%"></div></div><div class="chart-val">'+hours[h]+'</div></div>').join('');
+  if(tc){
+    const bestLabel=bestHour>0?'⭐ Seu melhor horário: '+bestHour+'h–'+(bestHour+1)+'h':'';
+    if(bestLabel){
+      const bh=$id('bestHourLabel');
+      if(bh)bh.textContent=bestLabel;
+    }
+    tc.innerHTML=[8,9,10,11,12,13,14,15,16,17,18,19].map(h=>{
+      const isBest=h===bestHour&&hours[h]>0;
+      return'<div class="chart-row">'
+        +'<div class="chart-lbl">'+h+'h'+(isBest?' ⭐':'')+'</div>'
+        +'<div class="chart-bar"><div class="chart-fill" style="width:'+Math.round(hours[h]/mxH*100)+'%;'+(isBest?'background:var(--taupe);':'')+'">'
+        +(hours[h]>0?'<span style="padding-left:4px;font-size:.65rem;">'+hours[h]+'</span>':'')
+        +'</div></div>'
+        +'<div class="chart-val">'+hours[h]+'</div>'
+        +'</div>';
+    }).join('');
+  }
   const scored=contacts.filter(c=>c.done).map(c=>({...c,score:calcScore(c)})).sort((a,b)=>b.score-a.score).slice(0,5);
   const COL={pendente:'#aaa',respondeu:'#16a34a',interessado:'#d97706',retornar:'#2563eb',nao_quer:'#dc2626',sem_viabilidade:'#7c3aed',fechado:'#7c3aed',errado:'#aaa'};
   const hl=$id('hotLeads');
@@ -2234,7 +2329,7 @@ function incrementDailySent(){
 function renderDailyCounter(){
   const el=$id('dailyCounter');if(!el)return;
   const n=getDailySent();
-  const limit=(()=>{try{return getCurrentDailyLimit();}catch(e){return 80;}})();
+  const limit=getCurrentDailyLimit();
   const pct=Math.min(100,Math.round(n/limit*100));
   const cls=n>=limit?'danger':n>=60?'warn':'';
   const msg=n>=limit
@@ -2415,7 +2510,7 @@ function useTpl(key){
     VARS[0]=t.msg;
   }
 }
-function renderAll(){renderHome();renderDailyCounter();try{renderBanGuard();}catch(e){}if(contacts.length){setDisplay('listSection','block');renderDisp();}}
+function renderAll(){renderHome();renderDailyCounter();renderBanGuard();if(contacts.length){setDisplay('listSection','block');renderDisp();}}
 
 // ═══ IMPORTAR PLANILHA / LEADS VIEWER ════════════════════
 // Estrutura fixa: A=Nome B=WhatsApp C=Tags D=Estado E=Enviado F=Data
@@ -2684,21 +2779,39 @@ function lvSelectAllPage(){
   }
   setTxt('lvSelCount',lvSelected.size);
 }
-function lvSelectNext(n){
-  // Seleciona os próximos N leads pendentes (não enviados)
-  const list=(_lvMode==='local'?_lvLocalFiltered||_parsedLeads:[]);
-  let added=0;
-  for(const lead of list){
-    if(added>=n)break;
-    if(!lead.done&&!lvSelected.has('local_'+lead.phone)){
-      lvSelected.add('local_'+lead.phone);
-      added++;
-    }
+// ── Atalho de teclado: Espaço = pausar/retomar ────────────
+document.addEventListener('keydown',e=>{
+  if(e.code==='Space'&&e.target===document.body&&isAuto){
+    e.preventDefault();
+    togglePause();
   }
-  setTxt('lvSelCount',lvSelected.size);
-  if(_lvMode==='local')renderLocalLeadsTable();
-  else loadLeadsPage();
-  toast('☑️ '+added+' leads selecionados');
+});
+
+function lvSelectNext(n){
+  if(_lvMode==='local'){
+    const list=_lvLocalFiltered||_parsedLeads;
+    let added=0;
+    for(const lead of list){
+      if(added>=n)break;
+      if(!lead.done&&!lvSelected.has('local_'+lead.phone)){
+        lvSelected.add('local_'+lead.phone);added++;
+      }
+    }
+    setTxt('lvSelCount',lvSelected.size);
+    renderLocalLeadsTable();
+    toast('☑️ '+added+' leads selecionados');
+  }else{
+    // Modo Supabase — busca próximos N pendentes via REST
+    const q={source:'eq.planilha',done:'eq.false'};
+    if(lvEstado)q.estado='eq.'+lvEstado;
+    q.order='created_at.asc';
+    sbRestGet('contacts',q,[0,n-1]).then(({data})=>{
+      (data||[]).forEach(lead=>lvSelected.add(lead.id));
+      setTxt('lvSelCount',lvSelected.size);
+      loadLeadsPage();
+      toast('☑️ '+(data||[]).length+' leads selecionados');
+    });
+  }
 }
 
 function lvClearSel(){
@@ -3052,7 +3165,89 @@ async function markLeadSentInSupabase(contactId){
   );
 }
 
-// ═══ ANTI-BAN GUARD ═══════════════════════════════════════
+// ═══ SOM DE NOTIFICAÇÃO ══════════════════════════════════
+function playBeep(freq=880,dur=0.4,vol=0.4,type='sine'){
+  try{
+    const ctx=new(window.AudioContext||window.webkitAudioContext)();
+    const osc=ctx.createOscillator();
+    const gain=ctx.createGain();
+    osc.connect(gain);gain.connect(ctx.destination);
+    osc.frequency.value=freq;osc.type=type;
+    gain.gain.setValueAtTime(vol,ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+dur);
+    osc.start(ctx.currentTime);osc.stop(ctx.currentTime+dur);
+  }catch(e){}
+}
+function playTimerEnd(){
+  // Três beeps ascendentes — indica que está na hora de enviar
+  playBeep(660,0.15,0.4);
+  setTimeout(()=>playBeep(770,0.15,0.4),200);
+  setTimeout(()=>playBeep(880,0.3,0.5),400);
+}
+
+// ═══ ESTADO DO DISPARADOR ════════════════════════════════
+const DISP_STATE_KEY='advshot_disp_state';
+function saveDispState(){
+  if(!contacts.length)return;
+  try{
+    localStorage.setItem(DISP_STATE_KEY,JSON.stringify({
+      contacts,
+      savedAt:Date.now(),
+      lvEstado:lvEstado||'',
+      total:contacts.length,
+      sent:contacts.filter(c=>c.done).length
+    }));
+  }catch(e){}
+}
+function loadDispState(){
+  try{
+    const raw=localStorage.getItem(DISP_STATE_KEY);
+    if(!raw)return null;
+    const s=JSON.parse(raw);
+    // Só restaura se tiver menos de 24h
+    if(Date.now()-s.savedAt>24*60*60*1000){localStorage.removeItem(DISP_STATE_KEY);return null;}
+    return s;
+  }catch(e){return null;}
+}
+function clearDispState(){localStorage.removeItem(DISP_STATE_KEY);}
+function checkDispStateOnLoad(){
+  const s=loadDispState();
+  if(!s||s.sent>=s.total)return;
+  const remaining=s.total-s.sent;
+  const ago=Math.round((Date.now()-s.savedAt)/60000);
+  const agoTxt=ago<60?ago+'min':Math.round(ago/60)+'h';
+  // Mostra banner de retomada no disparador
+  const banner=$id('dispResumeBanner');
+  if(banner){
+    banner.style.display='block';
+    banner.innerHTML=`<div style="background:#e8f5e9;border:1px solid #a7d7ad;border-radius:10px;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+      <div>
+        <div style="font-weight:700;font-size:.84rem;color:#15803d;">📋 Sessão anterior encontrada</div>
+        <div style="font-size:.76rem;color:var(--taupe);">Salva há ${agoTxt} · ${remaining} leads restantes de ${s.total}</div>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-green" style="font-size:.74rem;" onclick="restoreDispState()">▶ Retomar</button>
+        <button class="btn btn-ghost" style="font-size:.74rem;" onclick="discardDispState()">✕ Descartar</button>
+      </div>
+    </div>`;
+  }
+}
+function restoreDispState(){
+  const s=loadDispState();
+  if(!s)return;
+  contacts=s.contacts;
+  saveStorage();renderAll();
+  const banner=$id('dispResumeBanner');
+  if(banner)banner.style.display='none';
+  toast('✅ Sessão restaurada! '+contacts.filter(c=>!c.done).length+' leads pendentes.',4000);
+}
+function discardDispState(){
+  clearDispState();
+  const banner=$id('dispResumeBanner');
+  if(banner)banner.style.display='none';
+  toast('🗑️ Sessão descartada.',2000);
+}
+
 const BAN_GUARD_KEY='advshot_ban_guard';
 const SEND_LOG_KEY='advshot_send_log';
 const NORMAL_DAILY_LIMIT=80,RECOVERY_DAILY_LIMIT=20;
@@ -3070,7 +3265,16 @@ function isRecoveryMode(){const s=getBanGuardState();if(isBanLocked())return fal
 function getCurrentDailyLimit(){if(isBanLocked())return 0;if(isRecoveryMode())return RECOVERY_DAILY_LIMIT;return NORMAL_DAILY_LIMIT;}
 function getCurrentHourlyLimit(){if(isBanLocked())return 0;if(isRecoveryMode())return RECOVERY_HOURLY_LIMIT;return NORMAL_HOURLY_LIMIT;}
 function formatRemainingTime(ms){if(ms<=0)return'liberado';const t=Math.ceil(ms/60000),h=Math.floor(t/60),m=t%60;return h<=0?m+'min':h+'h '+m+'min';}
-function reportWhatsAppBan(hours){hours=hours||24;const lu=Date.now()+hours*36e5,ru=lu+RECOVERY_HOURS_AFTER_BAN*36e5;saveBanGuardState({reportedAt:Date.now(),lockedUntil:lu,recoveryUntil:ru,reason:'ban'});if(isAuto)stopAuto();renderBanGuard();renderDailyCounter();toast('🚫 Banimento registrado. Bloqueado por '+hours+'h.',5000);}
+function reportWhatsAppBan(hours){
+  hours=hours||24;
+  const lu=Date.now()+hours*36e5,ru=lu+RECOVERY_HOURS_AFTER_BAN*36e5;
+  const prev=getBanGuardState();
+  const history=(prev.history||[]);
+  history.push({ts:Date.now(),hours,reason:'whatsapp_ban',date:new Date().toLocaleString('pt-BR')});
+  saveBanGuardState({...prev,reportedAt:Date.now(),lockedUntil:lu,recoveryUntil:ru,reason:'ban',history});
+  if(isAuto)stopAuto();renderBanGuard();renderDailyCounter();
+  toast('🚫 Banimento registrado. Bloqueado por '+hours+'h.',5000);
+}
 function clearBanGuardLock(){const s=getBanGuardState();saveBanGuardState({...s,lockedUntil:null,recoveryUntil:Date.now()+RECOVERY_HOURS_AFTER_BAN*36e5,releasedAt:Date.now()});renderBanGuard();renderDailyCounter();toast('🟡 Bloqueio encerrado. Modo recuperação ativado.',4000);}
 function activateSafeMode(){saveBanGuardState({...getBanGuardState(),recoveryUntil:Date.now()+RECOVERY_HOURS_AFTER_BAN*36e5,safeModeAt:Date.now()});if(isAuto)stopAuto();renderBanGuard();renderDailyCounter();toast('🟡 Modo seguro ativado por 72h.',4000);}
 function getBanRiskLevel(){
@@ -3112,9 +3316,35 @@ function renderBanGuard(){
     +'<button class="btn btn-red" style="font-size:.72rem;" onclick="reportWhatsAppBan(24)">🚫 Fui banido 24h</button>'
     +'<button class="btn" style="font-size:.72rem;background:#f97316;color:#fff;border:none;border-radius:8px;padding:6px 12px;cursor:pointer;" onclick="activateSafeMode()">🟡 Modo seguro</button>'
     +(isBanLocked()?'<button class="btn btn-ghost" style="font-size:.72rem;" onclick="clearBanGuardLock()">✅ Já voltou</button>':'')
+    +(s.history?.length?'<button class="btn btn-ghost" style="font-size:.72rem;" onclick="showBanHistory()">📋 Histórico ('+s.history.length+')</button>':'')
     +'</div></div>';
 }
 setInterval(renderBanGuard,60000);
+
+function showBanHistory(){
+  const s=getBanGuardState();
+  const h=s.history||[];
+  if(!h.length){toast('Nenhum banimento registrado.',2000);return;}
+  const rows=h.slice().reverse().map(b=>
+    '<div style="display:flex;justify-content:space-between;padding:8px 10px;border-bottom:1px solid var(--gray);font-size:.76rem;">'
+    +'<span>🚫 Banido por '+b.hours+'h</span>'
+    +'<span style="color:var(--taupe);">'+b.date+'</span>'
+    +'</div>'
+  ).join('');
+  const modal=`<div onclick="this.remove()" style="position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;">
+    <div onclick="event.stopPropagation()" style="background:var(--white);border-radius:14px;padding:20px;width:100%;max-width:420px;max-height:80vh;overflow-y:auto;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <div style="font-weight:700;font-size:.94rem;">📋 Histórico de Banimentos</div>
+        <button onclick="this.closest('[style*=fixed]').remove()" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:#aaa;">✕</button>
+      </div>
+      <div style="font-size:.74rem;color:var(--taupe);margin-bottom:10px;">Total: ${h.length} banimento(s) registrado(s)</div>
+      ${rows}
+      <button onclick="if(confirm('Limpar histórico?')){const s=getBanGuardState();s.history=[];saveBanGuardState(s);this.closest('[style*=fixed]').remove();toast('Histórico limpo.');}" style="margin-top:12px;width:100%;" class="btn btn-ghost">🗑️ Limpar histórico</button>
+    </div>
+  </div>`;
+  document.body.insertAdjacentHTML('beforeend',modal);
+}
+
 
 // ═══ AVISO DE SAÍDA SEM SALVAR ═══════════════════════════
 let _xlsxModified=false;
