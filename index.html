@@ -514,7 +514,8 @@ body,input,select,textarea,.card,.modal,.ci,.crm-card,.stat-box,.fu-card,.tpl-ca
     <div class="card">
       <!-- AÇÕES NO TOPO -->
       <div class="list-top-actions">
-        <button class="btn btn-red" style="font-size:.74rem;" onclick="clearDisp()">🗑 Limpar lista</button>
+        <button class="btn btn-green" style="font-size:.74rem;" onclick="novoDia()" title="Salva no CRM e limpa fila">🌅 Novo dia</button>
+        <button class="btn btn-red" style="font-size:.74rem;" id="btnClearDisp" onclick="clearDispConfirm()">🗑 Limpar lista</button>
       </div>
       <!-- PROGRESSO -->
       <div class="prog-row">
@@ -651,6 +652,12 @@ body,input,select,textarea,.card,.modal,.ci,.crm-card,.stat-box,.fu-card,.tpl-ca
 
 <!-- DASHBOARD -->
 <div class="page" id="page-dash">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+    <div style="font-size:.76rem;color:var(--taupe);">Dados baseados nos seus disparos</div>
+    <button class="btn btn-ghost" style="font-size:.74rem;" onclick="exportDashCSV()">📥 Exportar CSV</button>
+  </div>
+  <!-- Comparativo semana a semana -->
+  <div class="card" id="weekCompareCard" style="margin-bottom:10px;"></div>
   <div class="card"><div id="responseRateCard"></div><div class="card-title">🔽 Funil de Vendas</div><div class="funnel" id="funnelChart"></div></div>
   <div class="card"><div class="card-title">📍 Taxa de Resposta por Estado</div><p style="font-size:.76rem;color:#aaa;margin-bottom:10px;">Percentual de leads que responderam ou avançaram em cada estado</p><div id="stateChart"></div></div>
   <div class="card"><div class="card-title">⏰ Melhor Horário</div><p style="font-size:.76rem;color:#aaa;margin-bottom:10px;">Baseado nos horários dos envios</p><div class="chart-bar-wrap" id="timeChart"></div></div>
@@ -715,6 +722,25 @@ body,input,select,textarea,.card,.modal,.ci,.crm-card,.stat-box,.fu-card,.tpl-ca
     </div>
     <div class="filter-row" id="leadsEstadoFilter"></div>
     <div id="leadsSheetTable"></div>
+  </div>
+  <!-- AGENDA DE DISPAROS -->
+  <div class="card">
+    <div class="card-title">📅 Agenda de Disparos</div>
+    <p style="font-size:.78rem;color:var(--taupe);margin-bottom:10px;">Programe disparos automáticos por estado, data e horário.</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr auto;gap:6px;margin-bottom:10px;flex-wrap:wrap;" class="row">
+      <input type="text" id="agendaEstado" placeholder="Estado (ex: PA)" style="min-width:80px;">
+      <input type="number" id="agendaN" placeholder="Qtd" value="50" min="1" max="200">
+      <input type="date" id="agendaDate">
+      <input type="time" id="agendaTime">
+      <button class="btn btn-taupe" onclick="addAgendaItem()">📅 Agendar</button>
+    </div>
+    <div id="agendaList"></div>
+  </div>
+  <!-- VARIAÇÕES POR ESTADO -->
+  <div class="card">
+    <div class="card-title">💬 Mensagem por Estado</div>
+    <p style="font-size:.78rem;color:var(--taupe);margin-bottom:10px;">Configure uma mensagem diferente para leads de cada estado. Quando ativo, substitui a mensagem padrão.</p>
+    <div id="stateMsgList"><p style="font-size:.76rem;color:var(--taupe);">Carregue leads na fila do Disparador para ver os estados disponíveis.</p></div>
   </div>
   <!-- BACKUP -->
   <div class="card">
@@ -1303,6 +1329,8 @@ async function loadFromSupabase(){
     const campData=campRes.data||[];
     const whData=whRes.data||[];
 
+    // Nunca sobrescreve campanhas locais com dados vazios do Supabase
+    const prevCampaigns=[...campaigns]; // backup antes de qualquer mudança
     if(cData.length>0){
       contacts=cData.map(row=>({
         id:row.id,phone:row.phone,nome:row.nome||row.phone,
@@ -1324,6 +1352,7 @@ async function loadFromSupabase(){
       }));
     }
     if(campData.length>0)campaigns=campData;
+    else if(prevCampaigns.length>0)campaigns=prevCampaigns; // nunca apaga campanhas locais
     if(whData.length>0)webhooks=whData;
 
     saveStorage();
@@ -1493,9 +1522,9 @@ function goTo(p){
   if(p==='dash')renderDash();
   if(p==='camp')renderCamps();
   if(p==='home')renderHome();
-  if(p==='disp'){renderDailyCounter();try{renderBanGuard();checkDispStateOnLoad();}catch(e){}}
+  if(p==='disp'){renderDailyCounter();try{renderBanGuard();checkDispStateOnLoad();renderStateMsgSettings();}catch(e){}}
   if(p==='leads')initLeadsViewer();
-  if(p==='conexoes'){renderWebhooks();renderPullSelect();renderLeadsSheetSelect();}
+  if(p==='conexoes'){renderWebhooks();renderPullSelect();renderLeadsSheetSelect();renderAgenda();}
 }
 function switchLeadsTab(tab){} // legado — removido
 function goSub(s){
@@ -1520,8 +1549,59 @@ function setMode(m){
   const ml=$id('manualList');if(ml)ml.style.display=m==='manual'?'flex':'none';
   const ri=$id('randInfo');if(ri)ri.style.display=m==='random'?'block':'none';
 }
-function getMsg(nome,idx){return applyVars(mode==='random'?VARS[idx%VARS.length]:VARS[selVar],nome);}
-function buildUrl(c){return'https://wa.me/'+c.phone+'?text='+encodeURIComponent(getMsg(c.nome,c.varIdx));}
+// ── Variações por estado ──────────────────────────────────
+function getStateMsgs(){try{return JSON.parse(localStorage.getItem('state_msgs')||'{}');}catch(e){return{};}}
+function saveStateMsgs(m){localStorage.setItem('state_msgs',JSON.stringify(m));}
+
+function getMsgForContact(c){
+  // Verifica se tem mensagem personalizada para o estado
+  const stateMsgs=getStateMsgs();
+  const estado=c.estado||'';
+  if(stateMsgs[estado]&&stateMsgs[estado].trim()){
+    return applyVars(stateMsgs[estado],cleanNome(c.nome));
+  }
+  return getMsg(c.nome,c.varIdx||0);
+}
+
+function renderStateMsgSettings(){
+  const el=$id('stateMsgList');if(!el)return;
+  const stateMsgs=getStateMsgs();
+  const estados=[...new Set(contacts.map(c=>c.estado).filter(Boolean))].sort();
+  if(!estados.length){el.innerHTML='<p style="font-size:.76rem;color:var(--taupe);">Carregue leads na fila primeiro para ver os estados.</p>';return;}
+  el.innerHTML=estados.map(est=>{
+    const custom=stateMsgs[est]||'';
+    const enabled=!!custom;
+    return`<div style="border:1px solid var(--gray);border-radius:10px;padding:12px;margin-bottom:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <div style="font-weight:700;font-size:.84rem;">${esc(est)}</div>
+        <label style="display:flex;align-items:center;gap:6px;font-size:.74rem;cursor:pointer;">
+          <input type="checkbox" ${enabled?'checked':''} onchange="toggleStateMsg('${est}',this.checked)" style="accent-color:var(--taupe);">
+          Mensagem personalizada
+        </label>
+      </div>
+      ${enabled?`<textarea rows="3" placeholder="Ex: {SAUDACAO}, {NOME}! Mensagem especial para leads do ${est}..." 
+        style="width:100%;font-size:.76rem;border:1px solid var(--gray);border-radius:8px;padding:8px;resize:vertical;box-sizing:border-box;"
+        onchange="saveStateMsg('${est}',this.value)">${esc(custom)}</textarea>
+        <div style="font-size:.68rem;color:var(--taupe);margin-top:3px;">Use {NOME}, {SAUDACAO} como nas mensagens padrão.</div>`
+        :'<div style="font-size:.74rem;color:#aaa;">Usando mensagem padrão</div>'}
+    </div>`;
+  }).join('');
+}
+function toggleStateMsg(est,enabled){
+  const stateMsgs=getStateMsgs();
+  if(!enabled)delete stateMsgs[est];
+  else stateMsgs[est]='';
+  saveStateMsgs(stateMsgs);
+  renderStateMsgSettings();
+}
+function saveStateMsg(est,msg){
+  const stateMsgs=getStateMsgs();
+  stateMsgs[est]=msg;
+  saveStateMsgs(stateMsgs);
+  toast('✅ Mensagem do '+est+' salva!',2000);
+}
+
+function buildUrl(c){return'https://wa.me/'+c.phone+'?text='+encodeURIComponent(getMsgForContact(c));}
 
 // ═══ CAMPANHAS ════════════════════════════════════════════
 function populateCampSelect(){
@@ -1830,8 +1910,57 @@ function sendPickedMsg(varIdx){
 }
 
 // ═══ LIMPAR E OCULTAR ═════════════════════════════════════
+function clearDispConfirm(){
+  const btn=$id('btnClearDisp');
+  if(btn&&btn.dataset.confirming==='1'){
+    clearDisp();
+    btn.textContent='🗑 Limpar lista';
+    btn.dataset.confirming='0';
+    return;
+  }
+  if(btn){
+    btn.textContent='⚠️ Confirmar?';
+    btn.dataset.confirming='1';
+    setTimeout(()=>{
+      if(btn.dataset.confirming==='1'){
+        btn.textContent='🗑 Limpar lista';
+        btn.dataset.confirming='0';
+      }
+    },3000);
+  }
+}
+
+function novoDia(){
+  if(!contacts.length){toast('⚠️ Fila já está vazia.',2000);return;}
+  const sent=contacts.filter(c=>c.done).length;
+  const pend=contacts.filter(c=>!c.done).length;
+  const resp=contacts.filter(c=>['respondeu','interessado','fechado'].includes(c.status)).length;
+  // Salva resumo do dia
+  const dayKey='advshot_day_'+today();
+  const prev=JSON.parse(localStorage.getItem(dayKey)||'{}');
+  localStorage.setItem(dayKey,JSON.stringify({
+    ...prev,
+    date:today(),
+    sent:(prev.sent||0)+sent,
+    responded:(prev.responded||0)+resp,
+    closedAt:new Date().toLocaleTimeString('pt-BR')
+  }));
+  // Mantém contatos pendentes se houver, zera só se tudo foi enviado
+  if(pend>0){
+    const keep=confirm('Ainda há '+pend+' pendentes. Manter na fila para amanhã?');
+    if(!keep)clearDisp();
+    else{
+      contacts=contacts.filter(c=>!c.done);
+      saveStorage();renderAll();
+    }
+  }else{
+    clearDisp();
+  }
+  clearDispState();
+  toast('🌅 Bom descanso! Hoje: '+sent+' enviados, '+resp+' responderam.',5000);
+}
+
 function clearDisp(){
-  if(isAuto)stopAuto();
   contacts=[];
   const inp=$id('linkInput');if(inp)inp.value='';
   setDisplay('listSection','none');
@@ -2244,6 +2373,29 @@ function renderDash(){
     }
   }
 
+  // ── Comparativo semana a semana ──────────────────────────
+  const wc=$id('weekCompareCard');
+  if(wc){
+    const log=getSendLog();
+    const now=Date.now();
+    const thisWeek=log.filter(e=>e.timestamp>=now-7*864e5).length;
+    const lastWeek=log.filter(e=>e.timestamp>=now-14*864e5&&e.timestamp<now-7*864e5).length;
+    const diff=thisWeek-lastWeek;
+    const pct=lastWeek>0?Math.round(Math.abs(diff)/lastWeek*100):0;
+    const color=diff>=0?'#16a34a':'#dc2626';
+    const arrow=diff>=0?'▲':'▼';
+    wc.innerHTML='<div class="card-title">📊 Esta semana vs Semana passada</div>'
+      +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center;">'
+      +'<div style="padding:10px;background:var(--white);border-radius:8px;border:1px solid var(--gray);">'
+      +'<div style="font-size:1.3rem;font-weight:700;">'+thisWeek+'</div><div style="font-size:.68rem;color:var(--taupe);text-transform:uppercase;">Esta semana</div></div>'
+      +'<div style="padding:10px;background:var(--white);border-radius:8px;border:1px solid var(--gray);">'
+      +'<div style="font-size:1.3rem;font-weight:700;">'+lastWeek+'</div><div style="font-size:.68rem;color:var(--taupe);text-transform:uppercase;">Semana passada</div></div>'
+      +'<div style="padding:10px;background:var(--white);border-radius:8px;border:1px solid '+color+'20;">'
+      +'<div style="font-size:1.3rem;font-weight:700;color:'+color+';">'+arrow+' '+pct+'%</div>'
+      +'<div style="font-size:.68rem;color:var(--taupe);text-transform:uppercase;">'+(diff>=0?'Mais':'Menos')+' disparos</div></div>'
+      +'</div>';
+  }
+
   // ── Taxa de resposta real ────────────────────────────────
   const rateEl=$id('responseRateCard');
   if(rateEl){
@@ -2294,6 +2446,23 @@ function renderDash(){
   if(hl)hl.innerHTML=scored.length?scored.map((c,i)=>'<div class="hot-lead"><div class="hot-score">'+['🥇','🥈','🥉','4°','5°'][i]+'</div><div class="hot-info"><div class="hot-name">'+esc(cleanNome(c.nome))+' <span class="estado-badge">'+(c.estado||'?')+'</span></div><div class="hot-sub">'+c.phone+(c.lastContact?' · '+c.lastContact:'')+'</div></div><span class="hot-status" style="background:'+(COL[c.status]||'#aaa')+'22;color:'+(COL[c.status]||'#aaa')+';border:1px solid '+(COL[c.status]||'#aaa')+'44;">'+(STOPTS.find(s=>s.v===c.status)||{l:c.status}).l+'</span><div style="font-size:.7rem;color:var(--taupe);font-weight:700;min-width:28px;text-align:right;">'+c.score+'pt</div></div>').join(''):'<div class="empty">Faça disparos para ver os leads mais quentes</div>';
 
 }
+function exportDashCSV(){
+  const rows=[['Data','Estado','Enviados','Responderam','Taxa']];
+  const map={};
+  contacts.filter(c=>c.done).forEach(c=>{
+    const est=c.estado||'?';
+    if(!map[est])map[est]={total:0,responded:0};
+    map[est].total++;
+    if(['respondeu','interessado','fechado','retornar'].includes(c.status))map[est].responded++;
+  });
+  Object.entries(map).sort((a,b)=>b[1].total-a[1].total).forEach(([est,v])=>{
+    rows.push([today(),est,v.total,v.responded,Math.round(v.responded/v.total*100)+'%']);
+  });
+  const csv=rows.map(r=>r.join(',')).join('\n');
+  navigator.clipboard?.writeText(csv).then(()=>toast('📋 CSV copiado! Cole no Excel.',4000))
+    .catch(()=>toast('❌ Copie manualmente do console.',3000));
+}
+
 // ═══ CAMPANHAS ════════════════════════════════════════════
 function renderCamps(){
   const el=$id('campList');if(!el)return;
@@ -3248,6 +3417,51 @@ function discardDispState(){
   toast('🗑️ Sessão descartada.',2000);
 }
 
+// ═══ AGENDA DE DISPAROS ═══════════════════════════════════
+const AGENDA_KEY='advshot_agenda';
+function getAgenda(){try{return JSON.parse(localStorage.getItem(AGENDA_KEY)||'[]');}catch(e){return[];}}
+function saveAgenda(a){localStorage.setItem(AGENDA_KEY,JSON.stringify(a));}
+function addAgendaItem(){
+  const estado=$id('agendaEstado')?.value?.trim();
+  const date=$id('agendaDate')?.value;
+  const time=$id('agendaTime')?.value;
+  const n=parseInt($id('agendaN')?.value||'50');
+  if(!estado||!date||!time){toast('⚠️ Preencha estado, data e hora.',3000);return;}
+  const agenda=getAgenda();
+  agenda.push({id:'ag_'+Date.now(),estado,date,time,n,done:false});
+  saveAgenda(agenda);renderAgenda();
+  toast('📅 Agendado: '+n+' leads do '+estado+' em '+date+' às '+time,4000);
+}
+function removeAgendaItem(id){saveAgenda(getAgenda().filter(a=>a.id!==id));renderAgenda();}
+function renderAgenda(){
+  const el=$id('agendaList');if(!el)return;
+  const agenda=getAgenda().filter(a=>!a.done);
+  if(!agenda.length){el.innerHTML='<p style="font-size:.76rem;color:var(--taupe);">Nenhum agendamento ativo.</p>';return;}
+  el.innerHTML=agenda.map(a=>'<div style="display:flex;align-items:center;gap:10px;border:1px solid var(--gray);border-radius:8px;padding:10px;margin-bottom:6px;">'
+    +'<div style="flex:1;"><div style="font-weight:700;font-size:.82rem;">📍 '+esc(a.estado)+' — '+a.n+' leads</div>'
+    +'<div style="font-size:.74rem;color:var(--taupe);">📅 '+a.date+' às '+a.time+'</div></div>'
+    +'<button onclick="removeAgendaItem(\''+a.id+'\')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:1rem;">🗑</button>'
+    +'</div>').join('');
+}
+function checkAgenda(){
+  const agenda=getAgenda();
+  const now=new Date();
+  const todayStr=now.toISOString().split('T')[0];
+  const timeStr=now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0');
+  let updated=false;
+  agenda.forEach(a=>{
+    if(!a.done&&a.date===todayStr&&a.time===timeStr){
+      a.done=true;updated=true;
+      playBeep(880,0.3,0.6);setTimeout(()=>playBeep(1100,0.4,0.6),300);
+      toast('📅 AGENDA: Hora de disparar '+a.n+' leads do '+a.estado+'!',8000);
+      lvEstado=a.estado;lvPage=0;
+      setTimeout(()=>goTo('leads'),1500);
+    }
+  });
+  if(updated)saveAgenda(agenda);
+}
+setInterval(checkAgenda,60000);
+
 const BAN_GUARD_KEY='advshot_ban_guard';
 const SEND_LOG_KEY='advshot_send_log';
 const NORMAL_DAILY_LIMIT=80,RECOVERY_DAILY_LIMIT=20;
@@ -3501,13 +3715,29 @@ async function loadLeadsFromSheet(){
 
 
 function saveStorage(){
+  // Backup de segurança das campanhas em chave separada
+  if(campaigns.length>0){
+    try{localStorage.setItem('advshot_camps_bak',JSON.stringify(campaigns));}catch(e){}
+  }
   try{localStorage.setItem('advshot2',JSON.stringify({contacts,campaigns,webhooks}));}catch(e){}
   setTimeout(()=>syncToSupabase(),500);
+}
+
+function recoverCampaigns(){
+  // Recupera campanhas do backup se estiverem vazias
+  if(!campaigns.length){
+    try{
+      const bak=localStorage.getItem('advshot_camps_bak');
+      if(bak){campaigns=JSON.parse(bak);toast('✅ Campanhas recuperadas do backup!',3000);}
+    }catch(e){}
+  }
 }
 function loadStorage(){
   try{
     const d=localStorage.getItem('advshot2');
     if(d){const p=JSON.parse(d);contacts=p.contacts||[];campaigns=p.campaigns||[];webhooks=p.webhooks||[];}
+    // Tenta recuperar campanhas do backup se vazias
+    recoverCampaigns();
     contacts.forEach(c=>{
       if(!c.id)c.id=genId();
       if(!c.estado)c.estado=getEstado(c.phone);
