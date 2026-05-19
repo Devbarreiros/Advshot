@@ -483,6 +483,7 @@ body,input,select,textarea,.card,.modal,.ci,.crm-card,.stat-box,.fu-card,.tpl-ca
   </div>
   <!-- CONTADOR DIÁRIO -->
   <div id="dailyCounter"></div>
+  <div id="banGuard"></div>
 
   <div class="card">
     <div class="card-title">📋 Contatos <span class="saudacao-badge" id="saudacaoLive"></span></div>
@@ -808,6 +809,7 @@ body,input,select,textarea,.card,.modal,.ci,.crm-card,.stat-box,.fu-card,.tpl-ca
         <div class="import-top-actions">
           <div class="import-count" id="lvCount"></div>
           <button class="btn btn-ghost" style="font-size:.73rem;" onclick="lvSelectAllPage()">☑️ Selec. página</button>
+          <button class="btn btn-ghost" style="font-size:.73rem;" onclick="lvSelectNext(5)" title="Seleciona os próximos 5 pendentes">☑️ Próximos 5</button>
           <button class="btn btn-ghost" style="font-size:.73rem;" onclick="lvClearSel()">□ Limpar</button>
         </div>
         <div class="import-table-wrap">
@@ -1271,41 +1273,41 @@ function rowToContact(r){
 }
 
 async function loadFromSupabase(){
-  if(!sbClient)return false;
+  if(!sbClient&&!SB_KEY)return false;
   try{
     setSyncDot('#fbbf24','Carregando...');
     setSyncStatus('🔄 Carregando dados do Supabase...','Aguarde um momento');
-    const [{data:c,error:ce},{data:camp,error:campe},{data:wh,error:whe}]=await Promise.all([
-      // ✅ Filtra APENAS contatos do CRM — exclui leads da planilha
-      sbClient.from('contacts').select('*').neq('source','planilha').order('created_at',{ascending:true}),
-      sbClient.from('campaigns').select('*'),
-      sbClient.from('webhooks').select('*')
+
+    // Usa XHR direto — elimina DataCloneError do sbClient
+    const[crmRes,campRes,whRes]=await Promise.all([
+      sbRestGet('contacts',{'source':'neq.planilha','order':'created_at.asc'},[0,4999]),
+      sbRestGet('campaigns',{},[0,999]),
+      sbRestGet('webhooks',{},[0,99])
     ]);
-    if(ce){
-      const msg=ce.message||ce.hint||ce.details||JSON.stringify(ce);
-      console.error('Contacts load error:',msg);
-      // Se for erro de coluna faltando, mostra instrução
-      if(msg.includes('column')||msg.includes('does not exist')){
-        setSyncStatus('⚠️ Colunas faltando no Supabase','Execute o SQL de migração em Settings → SQL Editor');
-      }
-      throw ce;
+
+    if(crmRes.error){
+      setSyncStatus('⚠️ Usando dados locais','Verifique o SQL de migração no Supabase → SQL Editor');
+      setSyncDot('#f97316','Erro parcial');
+      return false;
     }
-    if(c&&c.length>0){
-      contacts=c.map(rowToContact);
-      console.log('✅ Loaded '+c.length+' CRM contacts from Supabase');
-    } else if(contacts.length>0){
-      console.log('Supabase empty, uploading local data...');
-      await syncToSupabase(true);
+
+    const cData=crmRes.data||[], campData=campRes.data||[], whData=whRes.data||[];
+    const prevCamps=[...campaigns];
+
+    if(cData.length>0){
+      contacts=cData.map(rowToContact);
+    }else if(contacts.length>0){
+      syncToSupabase(true);
     }
-    if(camp&&camp.length>0)campaigns=camp;
-    if(wh&&wh.length>0)webhooks=wh;
-    const total=contacts.length;
-    setSyncDot('#4ade80','Sincronizado');
-    setSyncStatus('✅ Supabase conectado',total+' contatos CRM · '+(sbLastSync?'Última sync: '+sbLastSync:''));
+    if(campData.length>0)campaigns=campData;
+    else if(prevCamps.length>0)campaigns=prevCamps;
+    if(whData.length>0)webhooks=whData;
+
     sbLastSync=new Date().toLocaleTimeString('pt-BR');
+    setSyncDot('#4ade80','Sincronizado');
+    setSyncStatus('✅ Supabase conectado',contacts.length+' contatos CRM · Último sync: '+sbLastSync);
     return true;
   }catch(e){
-    console.error('Supabase load error:',e);
     setSyncDot('#f87171','Erro de conexão');
     setSyncStatus('⚠️ Usando dados locais',e.message||'Sem conexão com o Supabase');
     return false;
@@ -1461,6 +1463,7 @@ function goTo(p){
   if(p==='dash')renderDash();
   if(p==='camp')renderCamps();
   if(p==='home')renderHome();
+  if(p==='disp'){renderDailyCounter();renderBanGuard();}
   if(p==='leads')initLeadsViewer();
   if(p==='conexoes'){renderWebhooks();renderPullSelect();renderLeadsSheetSelect();}
 }
@@ -1581,6 +1584,7 @@ function blForceOpen(){
 }
 
 function _doOpenChat(i){
+  if(!canSendByBanGuard())return false;
   const w=window.open(buildUrl(contacts[i]),'_blank');
   if(!w||w.closed||typeof w.closed==='undefined'){
     setDisplay('popupWarn','block');return false;
@@ -1591,6 +1595,7 @@ function _doOpenChat(i){
   contacts[i].sentHour=nowHour();
   addHistory(i,getMsg(contacts[i].nome,contacts[i].varIdx),'disparo');
   incrementDailySent();
+  recordSendEvent(contacts[i]);
   // Se veio de importação Excel, marca na planilha
   if(contacts[i].xlsxSheetName&&contacts[i].xlsxRowIdx!=null){
     markXlsxRowSent(contacts[i].xlsxSheetName,contacts[i].xlsxRowIdx);
@@ -1599,7 +1604,7 @@ function _doOpenChat(i){
   }
   // Marca como enviado no Supabase (para leads vindos do viewer)
   if(contacts[i].id) markLeadSentInSupabase(contacts[i].id);
-  saveStorage();renderDisp();renderHome();
+  saveStorage();renderDisp();renderHome();renderBanGuard();
   return true;
 }
 
@@ -2155,10 +2160,126 @@ function incrementDailySent(){
     return n;
   }catch(e){return 0;}
 }
+// ═══ ANTI-BAN GUARD ══════════════════════════════════════
+var BAN_GUARD_KEY='advshot_ban_guard';
+var SEND_LOG_KEY='advshot_send_log';
+var NORMAL_DAILY_LIMIT=80,RECOVERY_DAILY_LIMIT=20;
+var NORMAL_HOURLY_LIMIT=12,RECOVERY_HOURLY_LIMIT=5;
+var RECOVERY_HOURS_AFTER_BAN=72;
+
+function getBanGuardState(){try{return JSON.parse(localStorage.getItem(BAN_GUARD_KEY)||'{}');}catch(e){return{};}}
+function saveBanGuardState(s){localStorage.setItem(BAN_GUARD_KEY,JSON.stringify(s||{}));}
+function getSendLog(){
+  try{const c=Date.now()-7*864e5;return JSON.parse(localStorage.getItem(SEND_LOG_KEY)||'[]').filter(i=>i&&i.timestamp>=c);}
+  catch(e){return[];}
+}
+function saveSendLog(l){localStorage.setItem(SEND_LOG_KEY,JSON.stringify(l||[]));}
+function recordSendEvent(contact){
+  const l=getSendLog();
+  l.push({timestamp:Date.now(),day:today(),hour:new Date().getHours(),phone:contact?.phone||'',estado:contact?.estado||''});
+  saveSendLog(l);
+}
+function getHourlySentCount(){return getSendLog().filter(i=>i.timestamp>=Date.now()-36e5).length;}
+function isBanLocked(){const s=getBanGuardState();return s.lockedUntil&&Date.now()<s.lockedUntil;}
+function isRecoveryMode(){const s=getBanGuardState();if(isBanLocked())return false;return s.recoveryUntil&&Date.now()<s.recoveryUntil;}
+function getCurrentDailyLimit(){if(isBanLocked())return 0;if(isRecoveryMode())return RECOVERY_DAILY_LIMIT;return NORMAL_DAILY_LIMIT;}
+function getCurrentHourlyLimit(){if(isBanLocked())return 0;if(isRecoveryMode())return RECOVERY_HOURLY_LIMIT;return NORMAL_HOURLY_LIMIT;}
+function formatRemainingTime(ms){const t=Math.ceil(ms/60000),h=Math.floor(t/60),m=t%60;return h<=0?m+'min':h+'h '+m+'min';}
+
+function canSendByBanGuard(){
+  const s=getBanGuardState();
+  if(isBanLocked()){toast('🚫 Bloqueado por ban. Aguarde '+formatRemainingTime(s.lockedUntil-Date.now())+'.',5000);if(isAuto)stopAuto();renderBanGuard();return false;}
+  const ds=getDailySent(),hs=getHourlySentCount();
+  if(ds>=getCurrentDailyLimit()){toast('⛔ Limite diário atingido. Pare por hoje.',5000);if(isAuto)stopAuto();renderBanGuard();return false;}
+  if(hs>=getCurrentHourlyLimit()){toast('⛔ Limite por hora atingido. Pause 1h.',5000);if(isAuto)stopAuto();renderBanGuard();return false;}
+  return true;
+}
+function getBanRiskLevel(){
+  const ds=getDailySent(),hs=getHourlySentCount(),dl=getCurrentDailyLimit(),hl=getCurrentHourlyLimit();
+  if(isBanLocked())return{level:'locked',label:'Bloqueado',color:'#ef4444',msg:'Conta em bloqueio. Não envie mensagens.'};
+  if(isRecoveryMode())return{level:'recovery',label:'Recuperação',color:'#f97316',msg:'Modo recuperação ativo. Use poucos disparos.'};
+  if(ds>=dl||hs>=hl)return{level:'critical',label:'Crítico',color:'#ef4444',msg:'Pare agora. Limite atingido.'};
+  if(ds>=50||hs>=9)return{level:'high',label:'Alto',color:'#ef4444',msg:'Risco alto. Pause algumas horas.'};
+  if(ds>=30||hs>=6)return{level:'medium',label:'Médio',color:'#f97316',msg:'Reduza o ritmo. Aumente o intervalo.'};
+  return{level:'low',label:'Baixo',color:'#22c55e',msg:'Ritmo seguro.'};
+}
+function reportWhatsAppBan(hours){
+  hours=hours||24;
+  const lu=Date.now()+hours*36e5,ru=lu+RECOVERY_HOURS_AFTER_BAN*36e5;
+  const prev=getBanGuardState();
+  const history=(prev.history||[]);
+  history.push({ts:Date.now(),hours,date:new Date().toLocaleString('pt-BR')});
+  saveBanGuardState({...prev,reportedAt:Date.now(),lockedUntil:lu,recoveryUntil:ru,history});
+  if(isAuto)stopAuto();renderBanGuard();renderDailyCounter();
+  toast('🚫 Banimento registrado. Bloqueado por '+hours+'h.',5000);
+}
+function clearBanGuardLock(){
+  const s=getBanGuardState();
+  saveBanGuardState({...s,lockedUntil:null,recoveryUntil:Date.now()+RECOVERY_HOURS_AFTER_BAN*36e5,releasedAt:Date.now()});
+  renderBanGuard();renderDailyCounter();toast('🟡 Bloqueio encerrado. Modo recuperação por 72h.',4000);
+}
+function activateSafeMode(){
+  saveBanGuardState({...getBanGuardState(),recoveryUntil:Date.now()+RECOVERY_HOURS_AFTER_BAN*36e5,safeModeAt:Date.now()});
+  if(isAuto)stopAuto();renderBanGuard();renderDailyCounter();toast('🟡 Modo seguro ativado por 72h.',4000);
+}
+function renderBanGuard(){
+  const el=$id('banGuard');if(!el)return;
+  const s=getBanGuardState(),risk=getBanRiskLevel();
+  const ds=getDailySent(),hs=getHourlySentCount(),dl=getCurrentDailyLimit(),hl=getCurrentHourlyLimit();
+  if(risk.level==='low'){el.innerHTML='';return;}
+  let extra='';
+  if(isBanLocked())extra='<div style="font-size:.74rem;color:#ef4444;margin-top:4px;font-weight:700;">⏳ '+formatRemainingTime(s.lockedUntil-Date.now())+' restantes</div>';
+  else if(isRecoveryMode())extra='<div style="font-size:.74rem;color:#f97316;margin-top:4px;font-weight:700;">🟡 Recuperação: '+formatRemainingTime(s.recoveryUntil-Date.now())+'</div>';
+  el.innerHTML='<div class="card" style="border:2px solid '+risk.color+';margin-bottom:10px;">'
+    +'<div class="card-title">🛡️ Anti-Ban Guard</div>'
+    +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">'
+    +'<div style="width:10px;height:10px;border-radius:50%;background:'+risk.color+';flex-shrink:0;"></div>'
+    +'<div><div style="font-size:.84rem;font-weight:700;color:'+risk.color+';">'+risk.label+'</div>'
+    +'<div style="font-size:.74rem;color:var(--taupe);">'+risk.msg+'</div>'+extra+'</div></div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:8px 0;">'
+    +'<div style="background:var(--white);border:1px solid var(--gray);border-radius:8px;padding:8px;text-align:center;"><div style="font-size:.65rem;color:var(--taupe);text-transform:uppercase;">Hoje</div><div style="font-size:1rem;font-weight:700;">'+ds+'/'+dl+'</div></div>'
+    +'<div style="background:var(--white);border:1px solid var(--gray);border-radius:8px;padding:8px;text-align:center;"><div style="font-size:.65rem;color:var(--taupe);text-transform:uppercase;">Última hora</div><div style="font-size:1rem;font-weight:700;">'+hs+'/'+hl+'</div></div>'
+    +'</div>'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap;">'
+    +'<button class="btn btn-red" style="font-size:.72rem;" onclick="reportWhatsAppBan(24)">🚫 Fui banido 24h</button>'
+    +'<button class="btn" style="font-size:.72rem;background:#f97316;color:#fff;border:none;border-radius:8px;padding:6px 12px;cursor:pointer;" onclick="activateSafeMode()">🟡 Modo seguro</button>'
+    +(isBanLocked()?'<button class="btn btn-ghost" style="font-size:.72rem;" onclick="clearBanGuardLock()">✅ Já voltou</button>':'')
+    +'</div></div>';
+}
+setInterval(renderBanGuard,60000);
+
+// ── Próximos N leads pendentes ────────────────────────────
+function lvSelectNext(n){
+  if(_lvMode==='local'){
+    const list=_lvLocalFiltered||_parsedLeads;
+    let added=0;
+    for(const lead of list){
+      if(added>=n)break;
+      if(!lead.done&&!lvSelected.has('local_'+lead.phone)){
+        lvSelected.add('local_'+lead.phone);added++;
+      }
+    }
+    setTxt('lvSelCount',lvSelected.size);
+    renderLocalLeadsTable();
+    toast('☑️ '+added+' leads selecionados');
+  }else{
+    // Modo Supabase — XHR para buscar próximos N pendentes
+    const q={'source':'eq.planilha','done':'eq.false'};
+    if(lvEstado)q['sheet_name']='eq.'+lvEstado;
+    q['order']='created_at.asc';
+    sbRestGet('contacts',q,[0,n-1]).then(({data})=>{
+      (data||[]).forEach(lead=>lvSelected.add(lead.id));
+      setTxt('lvSelCount',lvSelected.size);
+      loadLeadsPage();
+      toast('☑️ '+(data||[]).length+' leads selecionados');
+    });
+  }
+}
+
 function renderDailyCounter(){
   const el=$id('dailyCounter');if(!el)return;
   const n=getDailySent();
-  const limit=80;
+  const limit=getCurrentDailyLimit();
   const pct=Math.min(100,Math.round(n/limit*100));
   const cls=n>=limit?'danger':n>=60?'warn':'';
   const msg=n>=limit
@@ -2170,7 +2291,7 @@ function renderDailyCounter(){
     <div style="flex:1;">
       <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
         <span style="font-size:.76rem;font-weight:600;color:var(--black);">Disparadas hoje</span>
-        <span style="font-size:.72rem;color:#aaa;">limite: ${limit}</span>
+        <span style="font-size:.72rem;color:#aaa;">limite: ${limit}${isRecoveryMode()?' 🟡 recuperação':''}</span>
       </div>
       <div class="daily-bar"><div class="daily-fill" style="width:${pct}%"></div></div>
       <div style="font-size:.72rem;margin-top:4px;color:${n>=limit?'var(--red)':n>=60?'var(--orange)':'var(--taupe)'};">${msg}</div>
@@ -2348,7 +2469,7 @@ const LV_PAGE_SIZE=100;
 let lvPage=0, lvTotal=0, lvEstado='', lvEstados=[];
 let lvSelected=new Set();
 let lvSearchTimer=null;
-let importWB=null, importSheets=[];
+var importWB=null; let importSheets=[];
 let _lvMode='supabase'; // 'local' ou 'supabase'
 let _lvLocalFiltered=[];
 
@@ -2460,6 +2581,44 @@ function lvToggleLocal(phone){
 }
 
 
+// ── XHR direto Supabase (fallback sem DataCloneError) ─────
+function sbXHR(method,path,body,extraHeaders){
+  return new Promise((resolve)=>{
+    const xhr=new XMLHttpRequest();
+    xhr.open(method,SB_URL+'/rest/v1/'+path);
+    xhr.setRequestHeader('apikey',SB_KEY);
+    xhr.setRequestHeader('Authorization','Bearer '+SB_KEY);
+    xhr.setRequestHeader('Content-Type','application/json');
+    if(!extraHeaders||!extraHeaders['Prefer'])xhr.setRequestHeader('Prefer','count=exact');
+    if(extraHeaders)Object.entries(extraHeaders).forEach(([k,v])=>xhr.setRequestHeader(k,v));
+    xhr.timeout=15000;
+    xhr.onload=()=>{
+      try{
+        const d=xhr.responseText?JSON.parse(xhr.responseText):null;
+        const cr=xhr.getResponseHeader('content-range');
+        const count=cr?parseInt(cr.split('/')[1]||'0'):0;
+        resolve({data:Array.isArray(d)?d:[],count,ok:xhr.status<300,status:xhr.status});
+      }catch(e){resolve({data:[],count:0,ok:false});}
+    };
+    xhr.onerror=()=>resolve({data:[],count:0,ok:false,error:'network'});
+    xhr.ontimeout=()=>resolve({data:[],count:0,ok:false,error:'timeout'});
+    xhr.send(body?JSON.stringify(body):null);
+  });
+}
+async function sbRestGet(table,query,range){
+  let path=table+'?select=*';
+  if(query)Object.entries(query).forEach(([k,v])=>{if(v!==undefined&&v!==null&&v!=='')path+='&'+k+'='+encodeURIComponent(String(v));});
+  if(range){path+='&limit='+(range[1]-range[0]+1)+'&offset='+range[0];}
+  const r=await sbXHR('GET',path);
+  return{data:r.data,count:r.count,error:r.ok?null:'HTTP '+r.status};
+}
+async function sbRestGetDistinct(table,col,filter){
+  let path=table+'?select='+col+'&limit=5000';
+  if(filter)Object.entries(filter).forEach(([k,v])=>{if(v!==undefined&&v!==null&&v!=='')path+='&'+k+'='+encodeURIComponent(String(v));});
+  const r=await sbXHR('GET',path);
+  return[...new Set((r.data||[]).map(row=>row[col]).filter(Boolean))].sort();
+}
+
 async function initLeadsViewer(){
   // Se já tiver leads locais carregados, apenas re-renderiza
   if(_lvMode==='local'&&_parsedLeads.length>0){
@@ -2468,24 +2627,29 @@ async function initLeadsViewer(){
     renderLocalLeadsTable();
     return;
   }
+  // Mostra upload card por padrão enquanto verifica
+  setDisplay('importUploadCard','block');
+  setDisplay('leadsViewerCard','none');
   if(!sbClient){
-    setDisplay('importUploadCard','block');
-    setDisplay('leadsViewerCard','none');
     const el=$id('importSbStatus');
     if(el)el.innerHTML='<div style="background:#fdf2f2;border:1px solid #f5c6c6;border-radius:8px;padding:10px;font-size:.76rem;color:var(--red);">❌ Supabase não conectado.</div>';
     return;
   }
-  const{count}=await sbClient.from('contacts').select('*',{count:'exact',head:true}).eq('source','planilha');
-  if(count&&count>0){
-    setDisplay('importUploadCard','none');
-    setDisplay('leadsViewerCard','block');
-    await loadEstadoTabs();
-    await loadLeadsPage();
-  }else{
-    setDisplay('importUploadCard','block');
-    setDisplay('leadsViewerCard','none');
+  // Tenta contar leads — usa XHR (sem DataCloneError)
+  try{
+    const{count,error}=await sbRestGet('contacts',{'source':'eq.planilha'},[0,0]);
+    if(!error&&count>0){
+      setDisplay('importUploadCard','none');
+      setDisplay('leadsViewerCard','block');
+      await loadEstadoTabs();
+      await loadLeadsPage();
+    }else{
+      const el=$id('importSbStatus');
+      if(el)el.innerHTML='<div style="background:#e8f5e9;border:1px solid #a7d7ad;border-radius:8px;padding:10px;font-size:.76rem;color:#15803d;">✅ Supabase conectado. Faça o upload da sua planilha uma única vez abaixo.</div>';
+    }
+  }catch(e){
     const el=$id('importSbStatus');
-    if(el)el.innerHTML='<div style="background:#e8f5e9;border:1px solid #a7d7ad;border-radius:8px;padding:10px;font-size:.76rem;color:#15803d;">✅ Supabase conectado. Faça o upload da sua planilha uma única vez abaixo.</div>';
+    if(el)el.innerHTML='<div style="background:#e8f5e9;border:1px solid #a7d7ad;border-radius:8px;padding:10px;font-size:.76rem;color:#15803d;">✅ Supabase conectado. Faça o upload da sua planilha abaixo.</div>';
   }
 }
 
@@ -2496,9 +2660,13 @@ function showUploadArea(){
 // ── Filtro de estados (abas) ──────────────────────────────
 async function loadEstadoTabs(){
   if(!sbClient)return;
-  // Busca estados distintos
-  const{data}=await sbClient.from('contacts').select('sheet_name').eq('source','planilha').not('sheet_name','is',null).limit(1000);
-  lvEstados=[...new Set((data||[]).map(r=>r.sheet_name).filter(Boolean))].sort();
+  try{
+    const{data}=await sbClient.from('contacts').select('sheet_name').eq('source','planilha').not('sheet_name','is',null).limit(1000);
+    lvEstados=[...new Set((data||[]).map(r=>r.sheet_name).filter(Boolean))].sort();
+  }catch(e){
+    // Fallback XHR
+    lvEstados=await sbRestGetDistinct('contacts','sheet_name',{'source':'eq.planilha'});
+  }
   localStorage.setItem('lv_estados',JSON.stringify(lvEstados));
   renderEstadoTabs();
 }
@@ -2535,18 +2703,48 @@ async function loadLeadsPage(){
   const statusFilter=$id('lvStatusSel')?.value||'all';
   const from=lvPage*LV_PAGE_SIZE, to=from+LV_PAGE_SIZE-1;
 
-  let q=sbClient.from('contacts').select('*',{count:'exact'}).eq('source','planilha');
-  if(lvEstado) q=q.eq('sheet_name',lvEstado);
-  if(statusFilter==='pending') q=q.eq('done',false);
-  if(statusFilter==='sent') q=q.eq('done',true);
-  if(search) q=q.ilike('nome','%'+search+'%');
-  if(tag) q=q.eq('tags',tag);
-  if(cat) q=q.eq('categoria',cat);
-  q=q.order('sheet_name',{ascending:true}).order('done',{ascending:true}).range(from,to);
+  try{
+    let q=sbClient.from('contacts').select('*',{count:'exact'}).eq('source','planilha');
+    if(lvEstado) q=q.eq('sheet_name',lvEstado);
+    if(statusFilter==='pending') q=q.eq('done',false);
+    if(statusFilter==='sent') q=q.eq('done',true);
+    if(search) q=q.ilike('nome','%'+search+'%');
+    if(tag) q=q.eq('tags',tag);
+    if(cat) q=q.eq('categoria',cat);
+    q=q.order('sheet_name',{ascending:true}).order('done',{ascending:true}).range(from,to);
 
-  const{data,count,error}=await q;
-  if(error){if(tbody)tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--red);">❌ Erro ao carregar</td></tr>';return;}
+    const{data,count,error}=await q;
+    if(error)throw new Error(error.message||'query error');
+    _renderLeadsRows(tbody,data,count,from,to);
+    // Atualiza tags e categorias
+    if(lvPage===0&&data){
+      const allTags=[...new Set(data.map(r=>r.tags).filter(Boolean))].sort();
+      const ts=$id('lvTagSel');
+      if(ts){const cur=ts.value;ts.innerHTML='<option value="">Todas as tags</option>'+allTags.map(t=>'<option value="'+esc(t)+'"'+(t===cur?' selected':'')+'>'+esc(t)+'</option>').join('');}
+      try{
+        const{data:cats}=await sbClient.from('contacts').select('categoria').eq('source','planilha').not('categoria','is',null);
+        const allCats=[...new Set((cats||[]).map(r=>r.categoria).filter(Boolean))].sort();
+        const cs=$id('lvCategoriaSel');
+        if(cs){const cur=cs.value;cs.innerHTML='<option value="">Categoria</option>'+allCats.map(c=>'<option value="'+esc(c)+'"'+(c===cur?' selected':'')+'>'+esc(c)+'</option>').join('');}
+      }catch(e){}
+    }
+  }catch(e){
+    // Fallback: XHR direto
+    const q2={'source':'eq.planilha'};
+    if(lvEstado)q2['sheet_name']='eq.'+lvEstado;
+    if(statusFilter==='pending')q2['done']='eq.false';
+    if(statusFilter==='sent')q2['done']='eq.true';
+    if(search)q2['nome']='ilike.*'+search+'*';
+    if(tag)q2['tags']='eq.'+tag;
+    if(cat)q2['categoria']='eq.'+cat;
+    q2['order']='done.asc';
+    const{data,count,error:e2}=await sbRestGet('contacts',q2,[from,to]);
+    if(e2){if(tbody)tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--red);">❌ Erro ao carregar. Verifique conexão.</td></tr>';return;}
+    _renderLeadsRows(tbody,data,count,from,to);
+  }
+}
 
+function _renderLeadsRows(tbody,data,count,from,to){
   lvTotal=count||0;
   const totalPages=Math.ceil(lvTotal/LV_PAGE_SIZE);
   const start=from+1, end=Math.min(to+1,lvTotal);
@@ -2557,18 +2755,6 @@ async function loadLeadsPage(){
   const pb=$id('lvBtnPrev'),nb=$id('lvBtnNext');
   if(pb)pb.disabled=lvPage===0;
   if(nb)nb.disabled=lvPage>=totalPages-1;
-
-  // Atualiza tags e categorias
-  if(lvPage===0&&data){
-    const allTags=[...new Set(data.map(r=>r.tags).filter(Boolean))].sort();
-    const ts=$id('lvTagSel');
-    if(ts){const cur=ts.value;ts.innerHTML='<option value="">Todas as tags</option>'+allTags.map(t=>'<option value="'+esc(t)+'"'+(t===cur?' selected':'')+'>'+esc(t)+'</option>').join('');}
-    // Busca categorias distintas
-    const{data:cats}=await sbClient.from('contacts').select('categoria').eq('source','planilha').not('categoria','is',null);
-    const allCats=[...new Set((cats||[]).map(r=>r.categoria).filter(Boolean))].sort();
-    const cs=$id('lvCategoriaSel');
-    if(cs){const cur=cs.value;cs.innerHTML='<option value="">Categoria</option>'+allCats.map(c=>'<option value="'+esc(c)+'"'+(c===cur?' selected':'')+'>'+esc(c)+'</option>').join('');}
-  }
 
   if(!data||!data.length){
     if(tbody)tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:24px;color:#aaa;">Nenhum lead encontrado</td></tr>';
@@ -2859,15 +3045,21 @@ function _doParseAsync(arrBuf){
 }
 
 async function uploadLeadsToSb(leads,estadosList){
-  if(!sbClient){toast('❌ Supabase não conectado.');return;}
-  const BATCH=500;
+  if(!SB_KEY){toast('❌ Supabase não configurado.');return;}
+  const BATCH=300;
   let done=0;
   const total=leads.length;
+  let hadError=false;
 
   for(let i=0;i<leads.length;i+=BATCH){
     const batch=leads.slice(i,i+BATCH);
-    const{error}=await sbClient.from('contacts').upsert(batch,{onConflict:'phone,source'});
-    if(error)console.error('Batch error:',error);
+    try{
+      // Usa XHR com upsert via Prefer header (sem DataCloneError)
+      const r=await sbXHR('POST','contacts',batch,{
+        'Prefer':'resolution=merge-duplicates,return=minimal'
+      });
+      if(!r.ok)console.warn('Batch upload error:',r.status);
+    }catch(e){hadError=true;console.error('Batch error:',e);}
     done+=batch.length;
     const pct=Math.round(done/total*100);
     setTxt('uploadProgressTxt',done.toLocaleString('pt-BR')+' de '+total.toLocaleString('pt-BR')+' leads enviados...');
@@ -2875,14 +3067,13 @@ async function uploadLeadsToSb(leads,estadosList){
     const bar=$id('uploadProgressBar');if(bar)bar.style.width=pct+'%';
   }
 
-  // Salva lista de estados
   localStorage.setItem('lv_estados',JSON.stringify(estadosList));
   lvEstados=estadosList;
 
-  setTxt('uploadProgressTxt','✅ '+total.toLocaleString('pt-BR')+' leads salvos no Supabase!');
-  toast('✅ '+total.toLocaleString('pt-BR')+' leads no Supabase!',4000);
+  const msg=hadError?'⚠️ Alguns lotes falharam — verifique o Supabase':'✅ '+total.toLocaleString('pt-BR')+' leads salvos no Supabase!';
+  setTxt('uploadProgressTxt',msg);
+  toast(hadError?'⚠️ Upload parcial — verifique console':'✅ '+total.toLocaleString('pt-BR')+' leads no Supabase!',4000);
 
-  // Mostra o viewer
   setTimeout(async()=>{
     setDisplay('importUploadCard','none');
     setDisplay('leadsViewerCard','block');
