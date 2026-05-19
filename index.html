@@ -1092,6 +1092,10 @@ function doPost(e) {
 </div>
 
 <script>
+// ── Variáveis globais hoisted (var = sem TDZ) ────────────
+var importWB=null;
+var _parsedLeads=[], _parsedEstados=[];
+
 // ═══ SUPABASE ══════════════════════════════════════════════
 const SB_URL='https://diokuinaoemwjmugtgbe.supabase.co';
 const SB_KEY='sb_publishable_k7u_azd6k4olFFqJEp-Ukw_38bvYwFb';
@@ -2688,7 +2692,7 @@ const LV_PAGE_SIZE=100;
 let lvPage=0, lvTotal=0, lvEstado='', lvEstados=[];
 let lvSelected=new Set();
 let lvSearchTimer=null;
-let importWB=null, importSheets=[];
+importSheets=[];
 let _lvMode='supabase'; // 'local' ou 'supabase'
 let _lvLocalFiltered=[];
 
@@ -3058,7 +3062,7 @@ function handleXlsxFile(file){
 }
 
 
-let _parsedLeads=[], _parsedEstados=[];
+// _parsedLeads e _parsedEstados declarados no topo
 
 function cancelUpload(){
   _parsedLeads=[];_parsedEstados=[];
