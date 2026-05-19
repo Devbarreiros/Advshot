@@ -1695,6 +1695,7 @@ function sbXHR(method,path,body,extraHeaders){
     xhr.setRequestHeader('Authorization','Bearer '+SB_KEY);
     xhr.setRequestHeader('Content-Type','application/json');
     if(extraHeaders)Object.entries(extraHeaders).forEach(([k,v])=>xhr.setRequestHeader(k,v));
+    xhr.timeout=15000; // 15 segundos máximo
     xhr.onload=()=>{
       try{
         const data=xhr.responseText?JSON.parse(xhr.responseText):null;
@@ -1704,6 +1705,7 @@ function sbXHR(method,path,body,extraHeaders){
       }catch(e){resolve({data:[],count:0,ok:false,error:e.message});}
     };
     xhr.onerror=()=>resolve({data:[],count:0,ok:false,error:'Network error'});
+    xhr.ontimeout=()=>resolve({data:[],count:0,ok:false,error:'Timeout'});
     xhr.send(body?JSON.stringify(body):null);
   });
 }
@@ -2826,7 +2828,7 @@ async function initLeadsViewer(){
 
   // Usa XHR para contar leads — sem DataCloneError
   try{
-    const{data,count,error}=await sbRestGet('contacts',{source:'eq.planilha',done:'eq.false'},[0,0]);
+    const{data,count,error}=await sbRestGet('contacts',{source:'eq.planilha'},[0,0]);
     const total=count||0;
 
     if(!error&&total>0){
@@ -2885,7 +2887,6 @@ function lvSetEstado(est){
 
 // ── Carrega página de leads ───────────────────────────────
 async function loadLeadsPage(){
-  if(!sbClient)return;
   const tbody=$id('lvTableBody');
   if(tbody)tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:20px;color:#aaa;">🔄 Carregando...</td></tr>';
 
