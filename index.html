@@ -483,8 +483,6 @@ body,input,select,textarea,.card,.modal,.ci,.crm-card,.stat-box,.fu-card,.tpl-ca
   </div>
   <!-- CONTADOR DIÁRIO -->
   <div id="dailyCounter"></div>
-  <div id="banGuard"></div>
-  <div id="dispResumeBanner" style="display:none;margin-bottom:10px;"></div>
 
   <div class="card">
     <div class="card-title">📋 Contatos <span class="saudacao-badge" id="saudacaoLive"></span></div>
@@ -514,8 +512,7 @@ body,input,select,textarea,.card,.modal,.ci,.crm-card,.stat-box,.fu-card,.tpl-ca
     <div class="card">
       <!-- AÇÕES NO TOPO -->
       <div class="list-top-actions">
-        <button class="btn btn-green" style="font-size:.74rem;" onclick="novoDia()" title="Salva no CRM e limpa fila">🌅 Novo dia</button>
-        <button class="btn btn-red" style="font-size:.74rem;" id="btnClearDisp" onclick="clearDispConfirm()">🗑 Limpar lista</button>
+        <button class="btn btn-red" style="font-size:.74rem;" onclick="clearDisp()">🗑 Limpar lista</button>
       </div>
       <!-- PROGRESSO -->
       <div class="prog-row">
@@ -556,11 +553,6 @@ body,input,select,textarea,.card,.modal,.ci,.crm-card,.stat-box,.fu-card,.tpl-ca
       </div>
       <div class="info-box">⚠️ O WhatsApp abre com a mensagem preenchida — é só clicar Enviar!</div>
       <button class="btn btn-ghost" style="width:100%;font-size:.78rem;margin-bottom:8px;" id="btnHideSent" onclick="toggleHideSent()">🙈 Ocultar enviados</button>
-      <div style="margin-bottom:8px;position:relative;">
-        <input type="text" id="dispSearch" placeholder="🔍 Buscar lead por nome..." oninput="renderDisp()"
-          style="width:100%;padding:8px 12px;border:1px solid var(--gray);border-radius:8px;font-size:.78rem;background:var(--white);color:var(--black);box-sizing:border-box;">
-        <button onclick="$id('dispSearch').value='';renderDisp()" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:#aaa;cursor:pointer;font-size:.9rem;">✕</button>
-      </div>
       <div id="contactList"></div>
     </div>
   </div>
@@ -652,13 +644,7 @@ body,input,select,textarea,.card,.modal,.ci,.crm-card,.stat-box,.fu-card,.tpl-ca
 
 <!-- DASHBOARD -->
 <div class="page" id="page-dash">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-    <div style="font-size:.76rem;color:var(--taupe);">Dados baseados nos seus disparos</div>
-    <button class="btn btn-ghost" style="font-size:.74rem;" onclick="exportDashCSV()">📥 Exportar CSV</button>
-  </div>
-  <!-- Comparativo semana a semana -->
-  <div class="card" id="weekCompareCard" style="margin-bottom:10px;"></div>
-  <div class="card"><div id="responseRateCard"></div><div class="card-title">🔽 Funil de Vendas</div><div class="funnel" id="funnelChart"></div></div>
+  <div class="card"><div class="card-title">🔽 Funil de Vendas</div><div class="funnel" id="funnelChart"></div></div>
   <div class="card"><div class="card-title">📍 Taxa de Resposta por Estado</div><p style="font-size:.76rem;color:#aaa;margin-bottom:10px;">Percentual de leads que responderam ou avançaram em cada estado</p><div id="stateChart"></div></div>
   <div class="card"><div class="card-title">⏰ Melhor Horário</div><p style="font-size:.76rem;color:#aaa;margin-bottom:10px;">Baseado nos horários dos envios</p><div class="chart-bar-wrap" id="timeChart"></div></div>
   <div class="card"><div class="card-title">🔥 Leads Mais Quentes</div><div id="hotLeads"></div></div>
@@ -722,25 +708,6 @@ body,input,select,textarea,.card,.modal,.ci,.crm-card,.stat-box,.fu-card,.tpl-ca
     </div>
     <div class="filter-row" id="leadsEstadoFilter"></div>
     <div id="leadsSheetTable"></div>
-  </div>
-  <!-- AGENDA DE DISPAROS -->
-  <div class="card">
-    <div class="card-title">📅 Agenda de Disparos</div>
-    <p style="font-size:.78rem;color:var(--taupe);margin-bottom:10px;">Programe disparos automáticos por estado, data e horário.</p>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr auto;gap:6px;margin-bottom:10px;flex-wrap:wrap;" class="row">
-      <input type="text" id="agendaEstado" placeholder="Estado (ex: PA)" style="min-width:80px;">
-      <input type="number" id="agendaN" placeholder="Qtd" value="50" min="1" max="200">
-      <input type="date" id="agendaDate">
-      <input type="time" id="agendaTime">
-      <button class="btn btn-taupe" onclick="addAgendaItem()">📅 Agendar</button>
-    </div>
-    <div id="agendaList"></div>
-  </div>
-  <!-- VARIAÇÕES POR ESTADO -->
-  <div class="card">
-    <div class="card-title">💬 Mensagem por Estado</div>
-    <p style="font-size:.78rem;color:var(--taupe);margin-bottom:10px;">Configure uma mensagem diferente para leads de cada estado. Quando ativo, substitui a mensagem padrão.</p>
-    <div id="stateMsgList"><p style="font-size:.76rem;color:var(--taupe);">Carregue leads na fila do Disparador para ver os estados disponíveis.</p></div>
   </div>
   <!-- BACKUP -->
   <div class="card">
@@ -825,7 +792,6 @@ body,input,select,textarea,.card,.modal,.ci,.crm-card,.stat-box,.fu-card,.tpl-ca
             <button class="btn btn-ghost" style="font-size:.72rem;" onclick="showUploadArea()">➕ Adicionar leads</button>
           </div>
         </div>
-        <!-- ⚠️ NÃO REMOVER — filtro por estado essencial para o fluxo diário de disparos -->
         <div id="lvEstadoTabs" style="margin-bottom:14px;padding-bottom:12px;border-bottom:2px solid var(--gray);">
           <div style="font-size:.72rem;font-weight:700;color:var(--taupe);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">🗺️ Selecione o estado para disparar hoje:</div>
         </div>
@@ -842,7 +808,6 @@ body,input,select,textarea,.card,.modal,.ci,.crm-card,.stat-box,.fu-card,.tpl-ca
         <div class="import-top-actions">
           <div class="import-count" id="lvCount"></div>
           <button class="btn btn-ghost" style="font-size:.73rem;" onclick="lvSelectAllPage()">☑️ Selec. página</button>
-          <button class="btn btn-ghost" style="font-size:.73rem;" onclick="lvSelectNext(5)" title="Seleciona os próximos 5 pendentes">☑️ Próximos 5</button>
           <button class="btn btn-ghost" style="font-size:.73rem;" onclick="lvClearSel()">□ Limpar</button>
         </div>
         <div class="import-table-wrap">
@@ -1092,10 +1057,6 @@ function doPost(e) {
 </div>
 
 <script>
-// ── Variáveis globais hoisted (var = sem TDZ) ────────────
-var importWB=null;
-var _parsedLeads=[], _parsedEstados=[];
-
 // ═══ SUPABASE ══════════════════════════════════════════════
 const SB_URL='https://diokuinaoemwjmugtgbe.supabase.co';
 const SB_KEY='sb_publishable_k7u_azd6k4olFFqJEp-Ukw_38bvYwFb';
@@ -1314,65 +1275,39 @@ async function loadFromSupabase(){
   try{
     setSyncDot('#fbbf24','Carregando...');
     setSyncStatus('🔄 Carregando dados do Supabase...','Aguarde um momento');
-
-    // Usa XHR direto — sem DataCloneError
-    const [crmRes,campRes,whRes]=await Promise.all([
-      sbRestGet('contacts',{source:'neq.planilha',order:'created_at.asc'},[0,4999]),
-      sbRestGet('campaigns',{},[0,999]),
-      sbRestGet('webhooks',{},[0,99])
+    const [{data:c,error:ce},{data:camp,error:campe},{data:wh,error:whe}]=await Promise.all([
+      // ✅ Filtra APENAS contatos do CRM — exclui leads da planilha
+      sbClient.from('contacts').select('*').neq('source','planilha').order('created_at',{ascending:true}),
+      sbClient.from('campaigns').select('*'),
+      sbClient.from('webhooks').select('*')
     ]);
-
-    if(crmRes.error){
-      console.error('Contacts load error:',crmRes.error);
-      setSyncStatus('⚠️ Usando dados locais','Execute o SQL de migração no Supabase → SQL Editor');
-      setSyncDot('#f97316','Erro parcial');
-      return false;
+    if(ce){
+      const msg=ce.message||ce.hint||ce.details||JSON.stringify(ce);
+      console.error('Contacts load error:',msg);
+      // Se for erro de coluna faltando, mostra instrução
+      if(msg.includes('column')||msg.includes('does not exist')){
+        setSyncStatus('⚠️ Colunas faltando no Supabase','Execute o SQL de migração em Settings → SQL Editor');
+      }
+      throw ce;
     }
-
-    const cData=crmRes.data||[];
-    const campData=campRes.data||[];
-    const whData=whRes.data||[];
-
-    // Nunca sobrescreve campanhas locais com dados vazios do Supabase
-    const prevCampaigns=[...campaigns]; // backup antes de qualquer mudança
-    if(cData.length>0){
-      contacts=cData.map(row=>({
-        id:row.id,phone:row.phone,nome:row.nome||row.phone,
-        estado:row.estado||getEstado(row.phone),
-        status:row.status||'pendente',notes:row.notes||'',
-        lastContact:row.last_contact||row.lastContact||'',
-        nextContact:row.next_contact||row.nextContact||'',
-        service:row.service||row.tags||'—',tags:row.tags||'',
-        done:row.done||false,campaign:row.campaign||'default',
-        fuLevel:row.fu_level||0,varIdx:row.var_idx||0,
-        fuMsgIdx:row.fu_msg_idx||{1:-1,2:-1,3:-1},
-        fuResp:row.fu_resp||null,
-        sentAt:row.sent_at||null,
-        sentHour:row.sent_hour||null,
-        history:Array.isArray(row.history)?row.history:(row.history?[]:[]),
-        source:row.source||'crm',
-        col_e:row.col_e||'',col_f:row.col_f||'',
-        categoria:row.categoria||'',sheet_name:row.sheet_name||''
-      }));
+    if(c&&c.length>0){
+      contacts=c.map(rowToContact);
+      console.log('✅ Loaded '+c.length+' CRM contacts from Supabase');
+    } else if(contacts.length>0){
+      console.log('Supabase empty, uploading local data...');
+      await syncToSupabase(true);
     }
-    if(campData.length>0)campaigns=campData;
-    else if(prevCampaigns.length>0)campaigns=prevCampaigns; // nunca apaga campanhas locais
-    if(whData.length>0)webhooks=whData;
-
-    saveStorage();
-    sbLastSync=new Date().toLocaleTimeString('pt-BR');
+    if(camp&&camp.length>0)campaigns=camp;
+    if(wh&&wh.length>0)webhooks=wh;
+    const total=contacts.length;
     setSyncDot('#4ade80','Sincronizado');
-    setSyncStatus('✅ Supabase sincronizado','Último sync: '+sbLastSync+' · '+contacts.length+' leads');
+    setSyncStatus('✅ Supabase conectado',total+' contatos CRM · '+(sbLastSync?'Última sync: '+sbLastSync:''));
+    sbLastSync=new Date().toLocaleTimeString('pt-BR');
     return true;
   }catch(e){
-    const msg=e.message||'';
-    if(msg.includes('DataClone')||msg.includes('postMessage')){
-      setSyncStatus('⚠️ Usando dados locais','Erro interno do browser (DataClone) — dados locais preservados');
-      setSyncDot('#f97316','Aviso');
-    }else{
-      console.warn('Supabase load error:',msg);
-      setSyncDot('#f87171','Erro ao carregar');
-    }
+    console.error('Supabase load error:',e);
+    setSyncDot('#f87171','Erro de conexão');
+    setSyncStatus('⚠️ Usando dados locais',e.message||'Sem conexão com o Supabase');
     return false;
   }
 }
@@ -1526,9 +1461,8 @@ function goTo(p){
   if(p==='dash')renderDash();
   if(p==='camp')renderCamps();
   if(p==='home')renderHome();
-  if(p==='disp'){renderDailyCounter();try{renderBanGuard();checkDispStateOnLoad();renderStateMsgSettings();}catch(e){}}
   if(p==='leads')initLeadsViewer();
-  if(p==='conexoes'){renderWebhooks();renderPullSelect();renderLeadsSheetSelect();renderAgenda();}
+  if(p==='conexoes'){renderWebhooks();renderPullSelect();renderLeadsSheetSelect();}
 }
 function switchLeadsTab(tab){} // legado — removido
 function goSub(s){
@@ -1553,59 +1487,8 @@ function setMode(m){
   const ml=$id('manualList');if(ml)ml.style.display=m==='manual'?'flex':'none';
   const ri=$id('randInfo');if(ri)ri.style.display=m==='random'?'block':'none';
 }
-// ── Variações por estado ──────────────────────────────────
-function getStateMsgs(){try{return JSON.parse(localStorage.getItem('state_msgs')||'{}');}catch(e){return{};}}
-function saveStateMsgs(m){localStorage.setItem('state_msgs',JSON.stringify(m));}
-
-function getMsgForContact(c){
-  // Verifica se tem mensagem personalizada para o estado
-  const stateMsgs=getStateMsgs();
-  const estado=c.estado||'';
-  if(stateMsgs[estado]&&stateMsgs[estado].trim()){
-    return applyVars(stateMsgs[estado],cleanNome(c.nome));
-  }
-  return getMsg(c.nome,c.varIdx||0);
-}
-
-function renderStateMsgSettings(){
-  const el=$id('stateMsgList');if(!el)return;
-  const stateMsgs=getStateMsgs();
-  const estados=[...new Set(contacts.map(c=>c.estado).filter(Boolean))].sort();
-  if(!estados.length){el.innerHTML='<p style="font-size:.76rem;color:var(--taupe);">Carregue leads na fila primeiro para ver os estados.</p>';return;}
-  el.innerHTML=estados.map(est=>{
-    const custom=stateMsgs[est]||'';
-    const enabled=!!custom;
-    return`<div style="border:1px solid var(--gray);border-radius:10px;padding:12px;margin-bottom:8px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-        <div style="font-weight:700;font-size:.84rem;">${esc(est)}</div>
-        <label style="display:flex;align-items:center;gap:6px;font-size:.74rem;cursor:pointer;">
-          <input type="checkbox" ${enabled?'checked':''} onchange="toggleStateMsg('${est}',this.checked)" style="accent-color:var(--taupe);">
-          Mensagem personalizada
-        </label>
-      </div>
-      ${enabled?`<textarea rows="3" placeholder="Ex: {SAUDACAO}, {NOME}! Mensagem especial para leads do ${est}..." 
-        style="width:100%;font-size:.76rem;border:1px solid var(--gray);border-radius:8px;padding:8px;resize:vertical;box-sizing:border-box;"
-        onchange="saveStateMsg('${est}',this.value)">${esc(custom)}</textarea>
-        <div style="font-size:.68rem;color:var(--taupe);margin-top:3px;">Use {NOME}, {SAUDACAO} como nas mensagens padrão.</div>`
-        :'<div style="font-size:.74rem;color:#aaa;">Usando mensagem padrão</div>'}
-    </div>`;
-  }).join('');
-}
-function toggleStateMsg(est,enabled){
-  const stateMsgs=getStateMsgs();
-  if(!enabled)delete stateMsgs[est];
-  else stateMsgs[est]='';
-  saveStateMsgs(stateMsgs);
-  renderStateMsgSettings();
-}
-function saveStateMsg(est,msg){
-  const stateMsgs=getStateMsgs();
-  stateMsgs[est]=msg;
-  saveStateMsgs(stateMsgs);
-  toast('✅ Mensagem do '+est+' salva!',2000);
-}
-
-function buildUrl(c){return'https://wa.me/'+c.phone+'?text='+encodeURIComponent(getMsgForContact(c));}
+function getMsg(nome,idx){return applyVars(mode==='random'?VARS[idx%VARS.length]:VARS[selVar],nome);}
+function buildUrl(c){return'https://wa.me/'+c.phone+'?text='+encodeURIComponent(getMsg(c.nome,c.varIdx));}
 
 // ═══ CAMPANHAS ════════════════════════════════════════════
 function populateCampSelect(){
@@ -1685,44 +1568,1577 @@ function loadContacts(){
 }
 function mkC(phone,nome,idx,campaign){return{id:genId(),phone,nome,varIdx:idx,done:false,status:'pendente',sentAt:null,lastContact:null,nextContact:null,fuLevel:0,fuMsgIdx:{1:-1,2:-1,3:-1},campaign:campaign||'default',notes:'',sentHour:null,estado:getEstado(phone),service:'—',history:[]};}
 
-// ═══ SUPABASE REST DIRETO (XMLHttpRequest — sem DataCloneError) ═══
-// XHR bypassa completamente o postMessage/structuredClone do Supabase JS
-function sbXHR(method,path,body,extraHeaders){
-  return new Promise((resolve)=>{
-    const xhr=new XMLHttpRequest();
-    xhr.open(method,SB_URL+'/rest/v1/'+path);
-    xhr.setRequestHeader('apikey',SB_KEY);
-    xhr.setRequestHeader('Authorization','Bearer '+SB_KEY);
-    xhr.setRequestHeader('Content-Type','application/json');
-    if(extraHeaders)Object.entries(extraHeaders).forEach(([k,v])=>xhr.setRequestHeader(k,v));
-    xhr.timeout=15000; // 15 segundos máximo
-    xhr.onload=()=>{
-      try{
-        const data=xhr.responseText?JSON.parse(xhr.responseText):null;
-        const cr=xhr.getResponseHeader('content-range');
-        const count=cr?parseInt(cr.split('/')[1]||'0'):0;
-        resolve({data:Array.isArray(data)?data:data?[data]:[],count,ok:xhr.status<300,status:xhr.status});
-      }catch(e){resolve({data:[],count:0,ok:false,error:e.message});}
-    };
-    xhr.onerror=()=>resolve({data:[],count:0,ok:false,error:'Network error'});
-    xhr.ontimeout=()=>resolve({data:[],count:0,ok:false,error:'Timeout'});
-    xhr.send(body?JSON.stringify(body):null);
-  });
+// ═══ BLACKLIST ════════════════════════════════════════════
+const BLACKLIST_STATUS=['nao_quer','sem_viabilidade','errado'];
+let _blPendingIdx=-1;
+
+function isBlacklisted(c){return BLACKLIST_STATUS.includes(c.status);}
+
+function blForceOpen(){
+  $id('blModal').classList.remove('open');
+  if(_blPendingIdx>=0) _doOpenChat(_blPendingIdx);
+  _blPendingIdx=-1;
 }
 
-async function sbRestGet(table,query={},range=null){
-  try{
-    // Sem Range/Prefer headers — máxima compatibilidade CORS
-    let path=table+'?select=*';
-    Object.entries(query).forEach(([k,v])=>{
-      if(v!==undefined&&v!==null&&v!=='')path+='&'+k+'='+encodeURIComponent(String(v));
-    });
-    if(range){
-      const limit=range[1]-range[0]+1;
-      path+='&limit='+limit+'&offset='+range[0];
+function _doOpenChat(i){
+  const w=window.open(buildUrl(contacts[i]),'_blank');
+  if(!w||w.closed||typeof w.closed==='undefined'){
+    setDisplay('popupWarn','block');return false;
+  }
+  contacts[i].done=true;
+  contacts[i].sentAt=new Date().toLocaleString('pt-BR');
+  contacts[i].lastContact=today();
+  contacts[i].sentHour=nowHour();
+  addHistory(i,getMsg(contacts[i].nome,contacts[i].varIdx),'disparo');
+  incrementDailySent();
+  // Se veio de importação Excel, marca na planilha
+  if(contacts[i].xlsxSheetName&&contacts[i].xlsxRowIdx!=null){
+    markXlsxRowSent(contacts[i].xlsxSheetName,contacts[i].xlsxRowIdx);
+  } else if(contacts[i].xlsxRowIdx!=null){
+    markXlsxRowSent(null,contacts[i].xlsxRowIdx);
+  }
+  // Marca como enviado no Supabase (para leads vindos do viewer)
+  if(contacts[i].id) markLeadSentInSupabase(contacts[i].id);
+  saveStorage();renderDisp();renderHome();
+  return true;
+}
+
+// ═══ DUPLICATAS ═══════════════════════════════════════════
+let _pendingNew=[], _pendingDups=[];
+
+function closeDupModal(){
+  $id('dupModal').classList.remove('open');
+  _pendingNew=[];_pendingDups=[];
+}
+function addOnlyNew(){
+  _commitContacts(_pendingNew);
+  closeDupModal();
+}
+function addAllAnyway(){
+  _commitContacts([..._pendingNew,..._pendingDups]);
+  closeDupModal();
+}
+function _commitContacts(list){
+  if(!list.length){toast('⚠️ Nenhum contato novo para adicionar.');return;}
+  contacts=[...contacts,...list];
+  saveStorage();
+  setDisplay('listSection','block');
+  renderDisp();renderHome();
+  const st={};list.forEach(c=>{st[c.estado]=(st[c.estado]||0)+1;});
+  toast('✅ '+list.length+' contatos · '+Object.entries(st).sort((a,b)=>b[1]-a[1]).slice(0,4).map(([s,n])=>s+'('+n+')').join(' '));
+}
+
+
+function nextP(){
+  // Auto mode skips blacklisted contacts automatically
+  return contacts.findIndex(c=>!c.done&&(isAuto?!isBlacklisted(c):true));
+}
+function openChat(i){
+  const c=contacts[i];
+  // Blacklist warning for manual clicks
+  if(isBlacklisted(c)&&!isAuto){
+    _blPendingIdx=i;
+    const lbl=STOPTS.find(s=>s.v===c.status)?.l||c.status;
+    const body=$id('blBody');
+    if(body) body.innerHTML=
+      '<div class="bl-warn">'
+      +'<div class="bl-name">'+esc(cleanNome(c.nome))+' <span class="estado-badge">'+(c.estado||'?')+'</span></div>'
+      +'<div class="bl-status">Status: <strong>'+lbl+'</strong></div>'
+      +'<div style="font-size:.76rem;color:var(--black);line-height:1.5;">Este contato já foi marcado como <strong>'+lbl+'</strong>.<br>Enviar pode ser invasivo e aumenta o risco de bloqueio no WhatsApp.</div>'
+      +'</div>';
+    $id('blModal').classList.add('open');
+    return false;
+  }
+  return _doOpenChat(i);
+}
+
+function showRetomadaModal(i){
+  const c=contacts[i];
+  const nome=cleanNome(c.nome);
+  const el=$id('retomadaNome');if(el)el.textContent=nome;
+  const opcoes=$id('retomadaOpcoes');if(!opcoes)return;
+  opcoes.innerHTML=RETOMADA_VARS.map((v,idx)=>{
+    const msg=applyVars(v,nome);
+    return`<div style="border:1px solid var(--gray);border-radius:10px;overflow:hidden;">
+      <div style="padding:10px 12px;font-size:.78rem;color:var(--black);line-height:1.5;background:#faf9f7;">${esc(msg)}</div>
+      <button onclick="enviarRetomada('${c.phone}',${idx},'${esc(nome)}')"
+        style="width:100%;background:var(--taupe);color:#fff;border:none;padding:8px;cursor:pointer;font-size:.78rem;font-family:'Cormorant Garamond',serif;font-weight:600;">
+        💬 Enviar esta variação ${idx+1}
+      </button>
+    </div>`;
+  }).join('');
+  const m=$id('retomadaModal');if(m)m.classList.add('open');
+}
+
+function enviarRetomada(phone,idx,nome){
+  const msg=applyVars(RETOMADA_VARS[idx],nome);
+  window.open('https://wa.me/'+phone+'?text='+encodeURIComponent(msg),'_blank');
+  closeRetomada();
+}
+
+function closeRetomada(){
+  const m=$id('retomadaModal');if(m)m.classList.remove('open');
+}
+function toggleDone(i){contacts[i].done=!contacts[i].done;saveStorage();renderDisp();}
+
+// ═══ PICKER DE MENSAGEM ═══════════════════════════════════
+let _pickerIdx = -1; // contato aguardando seleção
+
+function pickMsg(i){
+  if(contacts[i].done) return;
+  _pickerIdx = i;
+  const c = contacts[i];
+  const dn = cleanNome(c.nome);
+  // Label do modal
+  const lbl = $id('msgPickerNome');
+  if(lbl) lbl.textContent = '📱 Para: '+dn+' ('+c.phone+')';
+  // Gera as 3 opções
+  const opts = $id('msgPickerOptions');
+  if(!opts) return;
+  opts.innerHTML = RETOMADA_VARS.map((tpl, vi) => {
+    const msg = tpl.replace(/\{NOME\}/g, dn).replace(/\{SAUDACAO\}/g, getSaudacao());
+    return '<div style="background:#faf9f7;border:1.5px solid var(--gray);border-radius:10px;padding:12px;cursor:pointer;transition:all .2s;" '
+      +'onmouseover="this.style.borderColor=\'var(--beige)\'" '
+      +'onmouseout="this.style.borderColor=\'var(--gray)\'">'
+      +'<div style="font-size:.66rem;font-weight:700;color:var(--taupe);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;">Variação '+(vi+1)+'</div>'
+      +'<div style="font-size:.8rem;color:var(--black);line-height:1.55;white-space:pre-line;">'+esc(msg)+'</div>'
+      +'<button class="btn btn-taupe" style="width:100%;margin-top:10px;padding:8px;" '
+      +'onclick="sendPickedMsg('+vi+')">✅ Usar esta</button>'
+      +'</div>';
+  }).join('');
+  const m = $id('msgPickerModal');
+  if(m) m.classList.add('open');
+}
+
+function closeMsgPicker(){
+  _pickerIdx = -1;
+  const m = $id('msgPickerModal');
+  if(m) m.classList.remove('open');
+}
+
+function sendPickedMsg(varIdx){
+  closeMsgPicker();
+  const i = _pickerIdx;
+  if(i === -1) return;
+  const c = contacts[i];
+  const dn = cleanNome(c.nome);
+  const msg = RETOMADA_VARS[varIdx]
+    .replace(/\{NOME\}/g, dn)
+    .replace(/\{SAUDACAO\}/g, getSaudacao());
+  const w = window.open('https://wa.me/'+c.phone+'?text='+encodeURIComponent(msg),'_blank');
+  if(!w||w.closed||typeof w.closed==='undefined'){
+    setDisplay('popupWarn','block');
+    return;
+  }
+  contacts[i].done = true;
+  contacts[i].sentAt = new Date().toLocaleString('pt-BR');
+  contacts[i].lastContact = today();
+  contacts[i].sentHour = nowHour();
+  addHistory(i, msg, 'disparo');
+  saveStorage();renderDisp();renderHome();
+  if(isAuto) scheduleNext();
+}
+
+// ═══ LIMPAR E OCULTAR ═════════════════════════════════════
+function clearDisp(){
+  if(isAuto)stopAuto();
+  contacts=[];
+  const inp=$id('linkInput');if(inp)inp.value='';
+  setDisplay('listSection','none');
+  saveStorage();renderHome();
+  toast('🗑 Lista limpa!');
+}
+function toggleHideSent(){
+  hideSent=!hideSent;
+  const btn=$id('btnHideSent');
+  if(btn)btn.textContent=hideSent?'👁 Mostrar enviados':'🙈 Ocultar enviados';
+  renderDisp();
+}
+
+// ═══ MODO AUTOMÁTICO ══════════════════════════════════════
+function getRandInt(){
+  const mn=parseInt($id('iMin').value)||3,mx=parseInt($id('iMax').value)||7;
+  const lo=Math.min(mn,mx),hi=Math.max(mn,mx);
+  return Math.floor(Math.random()*(hi-lo+1)+lo);
+}
+
+function startAuto(){
+  const i=nextP();
+  if(i===-1){toast('✅ Todos os contatos já foram enviados!');return;}
+  isAuto=true;isPaused=false;cdDeadline=0;
+  syncAutoButtons();
+  setDisplay('cdWrap','block');
+  const ok=openChat(i);
+  if(!ok){showNowArea();return;}
+  scheduleNext();
+}
+
+function scheduleNext(){
+  clearInterval(cdInterval);
+  const i=nextP();
+  if(i===-1){stopAuto();toast('✅ Todos os contatos foram abertos!');return;}
+  const m=getRandInt();
+  totalSecs=m*60;
+  secsLeft=totalSecs;
+  cdDeadline=Date.now()+(totalSecs*1000);
+  setTxt('iHint','🎲 próximo em '+m+' min');
+  hideNowArea();
+  // Atualiza display imediatamente — sem esperar o primeiro tick
+  drawCD();
+  // Interval de 500ms — robusto mesmo com throttling do browser
+  cdInterval=setInterval(cdTick,500);
+}
+
+function cdTick(){
+  if(isPaused)return;
+  secsLeft=Math.max(0,Math.round((cdDeadline-Date.now())/1000));
+  drawCD();
+  if(secsLeft<=0){
+    clearInterval(cdInterval);
+    const ni=nextP();
+    if(ni===-1){stopAuto();toast('✅ Todos os contatos foram abertos!');return;}
+    const ok=openChat(ni);
+    if(ok){scheduleNext();}else{
+      // Popup bloqueado — mostra aviso e agenda próxima tentativa em 5s
+      showNowArea();
+      setTxt('cdStatus','⚠️ Popup bloqueado — clique em Abrir Agora ou');
+      setTxt('cdTxt','aguarde');
+      setTimeout(()=>{if(isAuto&&!isPaused)scheduleNext();},5000);
     }
-    const r=await sbXHR('GET',path,null,null);
-    // Sem count=exact: usa length como estimativa de total
-    const count=r.count||r.data.length;
-    return{data:r.data,count,error:r.ok?null:'HTTP '+r.status};
-  }catch(e){return{data:[],count:0,error:e.message};}
+  }
+}
+
+function drawCD(){
+  // Atualiza número
+  const mm=String(Math.floor(secsLeft/60)).padStart(2,'0'),ss=String(secsLeft%60).padStart(2,'0');
+  setTxt('cdTxt',mm+':'+ss);
+  // Atualiza barra
+  const fill=$id('cdFill');
+  if(fill)fill.style.width=(totalSecs>0?Math.round(secsLeft/totalSecs*100):0)+'%';
+  // Atualiza label próximo
+  const i=nextP();
+  setTxt('nxtLbl',i!==-1?'Próximo: '+contacts[i].nome:'Todos concluídos!');
+  // Status
+  setTxt('cdStatus',isPaused?'⏸ Pausado em:':'Próximo em:');
+}
+
+function showNowArea(){
+  const i=nextP();
+  const btn=$id('btnNow');
+  if(btn)btn.textContent='🔔 ABRIR AGORA'+(i!==-1?' — '+contacts[i].nome:'');
+  setDisplay('nowArea','block');
+}
+function hideNowArea(){
+  setDisplay('nowArea','none');
+}
+
+function onNowClick(){
+  hideNowArea();
+  const i=nextP();
+  if(i===-1){if(isAuto)stopAuto();return;}
+  const ok=openChat(i);
+  if(ok){if(isAuto)scheduleNext();}
+  else{showNowArea();}
+}
+
+function skipContact(){
+  // Pula o contato atual sem abrir — marca como "pulado" e continua o timer
+  hideNowArea();
+  const i=nextP();
+  if(i!==-1){
+    // Apenas avança o índice sem marcar como enviado — move para o final
+    const c=contacts.splice(i,1)[0];
+    contacts.push(c);
+    saveStorage();renderDisp();
+    toast('⏭ Pulado — '+c.nome+' movido para o final da lista');
+  }
+  if(isAuto)scheduleNext();
+}
+
+function togglePause(){
+  if(!isPaused){
+    // PAUSAR: salva o tempo restante
+    secsLeft=Math.max(0,Math.round((cdDeadline-Date.now())/1000));
+    isPaused=true;
+  }else{
+    // RETOMAR: estende o deadline pelo tempo restante salvo
+    cdDeadline=Date.now()+(secsLeft*1000);
+    isPaused=false;
+  }
+  const btn=$id('btnPause'),banner=$id('pausedBanner'),fill=$id('cdFill');
+  if(isPaused){
+    if(btn){btn.textContent='▶ Continuar';btn.className='btn btn-green';}
+    if(banner)banner.style.display='block';
+    if(fill)fill.classList.add('paused');
+  }else{
+    if(btn){btn.textContent='⏸ Pausar';btn.className='btn btn-orange';}
+    if(banner)banner.style.display='none';
+    if(fill)fill.classList.remove('paused');
+  }
+  drawCD();
+}
+
+function stopAuto(){
+  isAuto=false;isPaused=false;
+  clearInterval(cdInterval);
+  syncAutoButtons();
+  setDisplay('cdWrap','none');
+  hideNowArea();
+  const banner=$id('pausedBanner');if(banner)banner.style.display='none';
+  const fill=$id('cdFill');if(fill)fill.classList.remove('paused');
+  setTxt('iHint','🎲 aleatório');
+}
+
+function syncAutoButtons(){
+  setDisplay('btnStart',isAuto?'none':'inline-block');
+  setDisplay('btnPause',isAuto?'inline-block':'none');
+  setDisplay('btnStop',isAuto?'inline-block':'none');
+  if(!isAuto){
+    const bp=$id('btnPause');if(bp){bp.textContent='⏸ Pausar';bp.className='btn btn-orange';}
+  }
+}
+
+// drawCD é a função que atualiza o display (definida acima em scheduleNext)
+
+// ═══ RENDER DISPARADOR ════════════════════════════════════
+function renderDisp(){
+  const done=contacts.filter(c=>c.done).length;
+  setTxt('tot',contacts.length);setTxt('sent',done);setTxt('left',contacts.length-done);
+  const pf=$id('pFill');if(pf)pf.style.width=(contacts.length?done/contacts.length*100:0)+'%';
+  const ni=isAuto?nextP():-1;
+  const list=$id('contactList');if(!list)return;
+  list.innerHTML=contacts.map((c,i)=>{
+    if(hideSent&&c.done)return'';
+    return'<div class="ci '+(c.done?'done ':'')+( i===ni?'active-item':'')+'">'
+      +'<span class="idx">'+(i+1)+'</span>'
+      +'<div class="ci-info">'
+        +'<div class="ci-name '+(c.done?'s':'')+'">'+esc(c.nome)+' <span class="estado-badge">'+(c.estado||'?')+'</span>'+(i===ni?'<span style="font-size:.62rem;background:var(--taupe);color:#fff;padding:1px 5px;border-radius:99px;margin-left:4px;">próximo</span>':'')+'</div>'
+        +'<div class="ci-sub">💬 '+esc(getMsg(c.nome,c.varIdx))+'</div>'
+      +'</div>'
+      +'<button class="btn-open" '
+      +(c.done
+        ? 'onclick="showRetomadaModal('+i+')" style="background:#4f46e5;" title="Mensagem de retomada"'
+        : 'onclick="openChat('+i+')"')
+      +'>'+(c.done?'🔁':'▶')+'</button>'
+      +'<div class="chk '+(c.done?'on':'')+'" onclick="toggleDone('+i+')">'+(c.done?'✓':'')+'</div>'
+    +'</div>';
+  }).join('');
+}
+
+// ═══ CRM ══════════════════════════════════════════════════
+function isOD(c){return c.nextContact&&c.nextContact<today()&&!['nao_quer','fechado','sem_viabilidade','errado'].includes(c.status);}
+function setF(f,e){crmF=f;document.querySelectorAll('#sub-cont .filter-row .fb').forEach(el=>el.classList.remove('active'));if(e&&e.target)e.target.classList.add('active');renderCRM();}
+function setStatus(i,v){contacts[i].status=v;saveStorage();renderCRM();renderHome();}
+function setLC(i,v){contacts[i].lastContact=v;saveStorage();}
+function setNC(i,v){contacts[i].nextContact=v;saveStorage();renderCRM();}
+function setNotes(i,v){contacts[i].notes=v;saveStorage();}
+function openWa(phone){window.open('https://wa.me/'+phone,'_blank');}
+function onSearchChange(){crmSearch=($id('crmSearch').value||'').toLowerCase();renderCRM();}
+function onSortChange(){crmSortMode=$id('crmSort').value;renderCRM();}
+function calcScore(c){let s=0;if(c.status==='interessado')s+=5;if(c.status==='respondeu')s+=3;if(c.status==='fechado')s+=10;if(c.fuResp==='pos')s+=4;if(isOD(c))s-=2;if(c.fuLevel>=3&&!c.fuResp)s-=3;return s;}
+function sortContacts(list){
+  const a=[...list];
+  if(crmSortMode==='nome')return a.sort((x,y)=>x.nome.localeCompare(y.nome,'pt-BR'));
+  if(crmSortMode==='status'){const o={interessado:0,respondeu:1,retornar:2,pendente:3,nao_quer:4,sem_viabilidade:5,fechado:6,errado:7};return a.sort((x,y)=>(o[x.status]||9)-(o[y.status]||9));}
+  if(crmSortMode==='data')return a.sort((x,y)=>{if(!x.nextContact&&!y.nextContact)return 0;if(!x.nextContact)return 1;if(!y.nextContact)return-1;return x.nextContact.localeCompare(y.nextContact);});
+  if(crmSortMode==='score')return a.sort((x,y)=>calcScore(y)-calcScore(x));
+  if(crmSortMode==='estado')return a.sort((x,y)=>(x.estado||'?').localeCompare(y.estado||'?'));
+  return a;
+}
+function startEdit(i){setDisplay('crm-edit-'+i,'flex');setDisplay('crm-view-'+i,'none');}
+function saveEdit(i){
+  const nome=($id('edit-nome-'+i)||{}).value||'';
+  const phone=(($id('edit-phone-'+i)||{}).value||'').replace(/\D/g,'');
+  if(nome.trim())contacts[i].nome=nome.trim();
+  if(phone){contacts[i].phone=phone;contacts[i].estado=getEstado(phone);}
+  saveStorage();renderCRM();toast('✅ Lead atualizado!');
+}
+function renderCRM(){
+  let od=0,int=0,ret=0,no=0;
+  contacts.forEach(c=>{if(isOD(c))od++;if(c.status==='interessado')int++;if(c.status==='retornar')ret++;if(c.status==='nao_quer')no++;});
+  setTxt('r-od',od);setTxt('r-int',int);setTxt('r-ret',ret);setTxt('r-no',no);
+  let list=contacts;
+  if(crmF==='overdue')list=contacts.filter(c=>isOD(c));
+  else if(crmF!=='todos')list=contacts.filter(c=>c.status===crmF);
+  if(crmSearch)list=list.filter(c=>(c.nome||'').toLowerCase().includes(crmSearch)||(c.phone||'').includes(crmSearch));
+  list=sortContacts(list);
+  const el=$id('crmList');if(!el)return;
+  if(!list.length){el.innerHTML='<div class="empty">Nenhum lead encontrado</div>';return;}
+  el.innerHTML=list.map(c=>{
+    const i=contacts.indexOf(c),od=isOD(c);
+    const sel=STOPTS.map(o=>'<option value="'+o.v+'"'+(c.status===o.v?' selected':'')+'>'+o.l+'</option>').join('');
+    const camp=campaigns.find(cp=>cp.id===c.campaign);
+    return'<div class="crm-card '+(od?'od ':'')+( batchMode&&selectedLeads.has(i)?'selected':'')+'" id="bcard-'+i+'" '+(batchMode?'onclick="toggleLeadSelection('+i+')" style="cursor:pointer;"':'')+' data-real-idx="'+i+'">'
+      +(batchMode?'<div style="padding:10px 12px 0;"><div class="lead-checkbox '+(selectedLeads.has(i)?'on':'')+'" id="bchk-'+i+'">'+(selectedLeads.has(i)?'✓':'')+'</div></div>':'')
+      +'<div class="crm-head"><div style="flex:1;min-width:0;">'
+      +'<div id="crm-view-'+i+'"><div class="crm-name">'+esc(cleanNome(c.nome))+' <span class="estado-badge">'+(c.estado||'?')+'</span>'+(od?'<span class="od-tag">⚠️ Atraso</span>':'')+'</div>'
+      +'<div class="crm-sub">'+c.phone+(camp&&camp.id!=='default'?' · 📁 '+esc(camp.name):'')+(c.sentAt?' · 📤 '+c.sentAt:'')+'</div></div>'
+      +'<div id="crm-edit-'+i+'" style="display:none;flex-direction:column;gap:4px;">'
+      +'<input id="edit-nome-'+i+'" class="edit-inline" type="text" value="'+esc(c.nome)+'" placeholder="Nome">'
+      +'<input id="edit-phone-'+i+'" class="edit-inline" type="text" value="'+c.phone+'" placeholder="Telefone">'
+      +'<div style="display:flex;gap:5px;"><button class="btn btn-dark" style="padding:5px 10px;font-size:.74rem;" onclick="saveEdit('+i+')">✅ Salvar</button>'
+      +'<button class="btn btn-ghost" style="padding:5px 10px;font-size:.74rem;" onclick="setDisplay(\'crm-edit-'+i+'\',\'none\');setDisplay(\'crm-view-'+i+'\',\'block\')">✕</button></div></div>'
+      +'</div><button class="btn btn-ghost" style="padding:4px 8px;font-size:.7rem;flex-shrink:0;" onclick="startEdit('+i+')">✏️</button></div>'
+      +'<div class="crm-body"><div class="two-col">'
+      +'<div><label class="field-lbl">📅 Último contato</label><input type="date" value="'+(c.lastContact||'')+'" onchange="setLC('+i+',this.value)" style="width:100%;"></div>'
+      +'<div><label class="field-lbl">🔔 Retornar em</label><input type="date" value="'+(c.nextContact||'')+'" onchange="setNC('+i+',this.value)" style="width:100%;"></div></div>'
+      +'<div class="two-col">'
+      +'<div><label class="field-lbl">⚖️ Serviço</label>'
+      +'<select onchange="setService('+i+',this.value)" style="width:100%;">'
+      +SERVICES.map(s=>'<option value="'+s+'"'+(c.service===s?' selected':'')+'>'+s+'</option>').join('')
+      +'</select></div>'
+      +'<div style="display:flex;flex-direction:column;justify-content:flex-end;">'
+      +'<button class="btn btn-ghost" style="font-size:.72rem;padding:5px 8px;" onclick="toggleHistory('+i+')">📋 Histórico ('+(c.history||[]).length+')</button></div></div>'
+      +'<div id="hist-'+i+'" style="display:none;"><div class="hist-wrap" id="hist-body-'+i+'"></div></div>'
+      +'<div><label class="field-lbl">📝 Anotações</label><textarea class="notes-input" onchange="setNotes('+i+',this.value)" placeholder="Observações...">'+esc(c.notes||'')+'</textarea></div>'
+      +'<div class="crm-actions"><select onchange="setStatus('+i+',this.value)" style="flex:1;">'+sel+'</select>'
+      +'<button class="btn-wa '+(od?'od':'')+'" onclick="openWa(\''+c.phone+'\')">💬 WhatsApp</button></div>'
+      +'</div></div>';
+  }).join('');
+}
+
+// ═══ FOLLOW UP ════════════════════════════════════════════
+function setFuF(f,e){fuF=f;document.querySelectorAll('#fuLvlFilter .fb').forEach(el=>el.classList.remove('active'));if(e&&e.target)e.target.classList.add('active');renderFU();}
+function setFuEstado(est,e){fuEstado=est;document.querySelectorAll('#fuEstadoFilter .fb').forEach(el=>el.classList.remove('active'));if(e&&e.target)e.target.classList.add('active');renderFU();}
+function renderFuEstadoFilter(list){
+  const el=$id('fuEstadoFilter');if(!el)return;
+  const states=[...new Set(list.map(c=>c.estado||'?'))].filter(s=>s&&s!=='?').sort();
+  if(states.length<=1){el.innerHTML='';return;}
+  el.innerHTML='<button class="fb'+(fuEstado==='todos'?' active':'')+'" onclick="setFuEstado(\'todos\',event)">📍 Todos</button>'
+    +states.map(s=>'<button class="fb'+(fuEstado===s?' active':'')+'" onclick="setFuEstado(\''+s+'\',event)">'+s+'</button>').join('');
+}
+function regenFu(i,lv){
+  const c=contacts[i],pool=FU[lv],used=c.fuMsgIdx[lv];
+  const idx=(used+1+Math.floor(Math.random()*(pool.length-1)))%pool.length;
+  contacts[i].fuMsgIdx[lv]=idx;saveStorage();
+  const el=$id('fum-'+i+'-'+lv);if(el)el.textContent=applyVars(pool[idx],cleanNome(c.nome));
+}
+function sendFu(i,lv){
+  const el=$id('fum-'+i+'-'+lv);if(!el)return;
+  const msg=el.textContent;
+  const ok=window.open('https://wa.me/'+contacts[i].phone+'?text='+encodeURIComponent(msg),'_blank');
+  if(!ok){setDisplay('popupWarn','block');return;}
+  contacts[i].lastContact=today();contacts[i].fuLevel=lv;
+  addHistory(i,msg,'followup');
+  incrementDailySent();
+  saveStorage();renderFU();renderCRM();
+}
+function setFuResp(i,lv,resp){
+  contacts[i].fuResp=resp;
+  if(resp==='pos')contacts[i].status='interessado';
+  else if(resp==='neg'){contacts[i].fuLevel=Math.min(lv+1,3);contacts[i].status='retornar';}
+  saveStorage();renderFU();renderCRM();
+}
+async function aiGenFu(i,lv){
+  const c=contacts[i],el=$id('fum-'+i+'-'+lv);if(!el)return;
+  const orig=el.textContent;el.textContent='✨ Gerando com IA...';el.classList.add('loading');
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:300,messages:[{role:'user',content:'Gere UMA mensagem de follow up de nível '+lv+' para: Nome: '+cleanNome(c.nome)+', Status: '+c.status+'. Use "'+getSaudacao()+'" no início. Retorne APENAS a mensagem.'}]})});
+    const data=await res.json();
+    el.textContent=data.content?.find(b=>b.type==='text')?.text?.trim()||orig;
+  }catch(e){el.textContent=orig;}
+  el.classList.remove('loading');
+}
+async function aiSuggest(i){
+  const c=contacts[i],box=$id('aibox-'+i);if(!box)return;
+  box.innerHTML='<strong>✨ IA</strong> Analisando...';box.style.display='block';
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:150,messages:[{role:'user',content:'Analise e sugira próximo passo em 1-2 frases. Nome: '+cleanNome(c.nome)+', Estado: '+(c.estado||'?')+', Status: '+c.status+'. Direto.'}]})});
+    const data=await res.json();
+    box.innerHTML='<strong>✨ Sugestão IA:</strong> '+esc(data.content?.find(b=>b.type==='text')?.text?.trim()||'Não foi possível gerar.');
+  }catch(e){box.innerHTML='<strong>✨ IA:</strong> Erro.';}
+}
+function renderFU(){
+  const elig=contacts.filter(c=>c.done&&!['nao_quer','errado','fechado','sem_viabilidade'].includes(c.status));
+  renderFuEstadoFilter(elig);
+  let list=elig;
+  if(fuF!=='todos')list=list.filter(c=>String(c.fuLevel===0?1:Math.min(c.fuLevel+1,3))===fuF);
+  if(fuEstado!=='todos')list=list.filter(c=>(c.estado||'?')===fuEstado);
+  const el=$id('fuList');if(!el)return;
+  if(!list.length){el.innerHTML='<div class="empty">Nenhum lead disponível.<br><small>Aparecem após o primeiro disparo.</small></div>';return;}
+  const LVLS={1:'Nível 1 — Suave',2:'Nível 2 — Médio',3:'Nível 3 — Encerramento'};
+  const LCS={1:'l1',2:'l2',3:'l3'};
+  el.innerHTML=list.map(c=>{
+    const i=contacts.indexOf(c);
+    const lv=c.fuLevel===0?1:Math.min(c.fuLevel+1,3);
+    if(c.fuMsgIdx[lv]===-1)c.fuMsgIdx[lv]=0;
+    const dn=cleanNome(c.nome);
+    const msg=applyVars(FU[lv][Math.max(0,c.fuMsgIdx[lv])],dn);
+    return'<div class="fu-card"><div class="fu-head"><div class="fu-info"><div class="fu-name">'+esc(dn)+' <span class="estado-badge">'+(c.estado||'?')+'</span></div><div class="fu-sub">'+c.phone+(c.lastContact?' · último: '+c.lastContact:'')+'</div></div><span class="lvl-badge '+LCS[lv]+'">'+LVLS[lv]+'</span></div>'
+    +'<div class="fu-body"><div class="fu-msg-lbl">Mensagem sugerida</div><div class="fu-msg" id="fum-'+i+'-'+lv+'">'+esc(msg)+'</div>'
+    +'<div class="ai-suggest" id="aibox-'+i+'" style="display:none;"><strong>✨ IA</strong></div>'
+    +'<div class="fu-acts"><button class="btn btn-taupe" onclick="sendFu('+i+','+lv+')">💬 Enviar</button><button class="btn btn-ghost" onclick="regenFu('+i+','+lv+')">🔄 Variar</button><button class="btn btn-ai" onclick="aiGenFu('+i+','+lv+')">✨ IA</button><button class="btn btn-ghost" onclick="aiSuggest('+i+')">💡 Próximo passo</button></div></div>'
+    +'<div class="fu-resp"><span class="resp-lbl">Resposta:</span><button class="rb" onclick="setFuResp('+i+','+lv+',\'pos\')">✅ Interessado</button><button class="rb" onclick="setFuResp('+i+','+lv+',\'neu\')">🔄 Sem resposta</button><button class="rb" onclick="setFuResp('+i+','+lv+',\'neg\')">❌ Sem interesse</button></div></div>';
+  }).join('');
+}
+// ═══ DASHBOARD ════════════════════════════════════════════
+function renderDash(){
+  const tot=contacts.filter(c=>c.done).length,resp=contacts.filter(c=>['respondeu','interessado','fechado'].includes(c.status)).length,inter=contacts.filter(c=>['interessado','fechado'].includes(c.status)).length,fech=contacts.filter(c=>c.status==='fechado').length;
+  const mx=Math.max(tot,1);
+  const fc=$id('funnelChart');
+  if(fc)fc.innerHTML=[{l:'Disparados',v:tot,c:'#716B5B'},{l:'Responderam',v:resp,c:'#BCAF95'},{l:'Interessados',v:inter,c:'#8B7355'},{l:'Fechados',v:fech,c:'#20211F'}].map(s=>'<div class="funnel-step"><div class="funnel-lbl">'+s.l+'</div><div class="funnel-bar-wrap"><div class="funnel-fill" style="width:'+Math.round(s.v/mx*100)+'%;background:'+s.c+'"><span>'+s.v+'</span></div></div><div class="funnel-pct">'+(tot>0?Math.round(s.v/tot*100)+'%':'—')+'</div></div>').join('');
+
+  // ── Taxa de Resposta por Estado ──────────────────────────
+  const sc=$id('stateChart');
+  if(sc){
+    const sent=contacts.filter(c=>c.done);
+    if(!sent.length){sc.innerHTML='<div class="empty">Faça disparos para ver a taxa por estado.</div>';}
+    else{
+      // Group by estado
+      const map={};
+      sent.forEach(c=>{
+        const est=c.estado||'?';
+        if(!map[est])map[est]={total:0,responded:0};
+        map[est].total++;
+        if(['respondeu','interessado','fechado','retornar'].includes(c.status)) map[est].responded++;
+      });
+      // Sort by rate descending, min 2 leads per state
+      const rows=Object.entries(map)
+        .filter(([,v])=>v.total>=1)
+        .map(([est,v])=>({est,total:v.total,responded:v.responded,rate:Math.round(v.responded/v.total*100)}))
+        .sort((a,b)=>b.rate-a.rate);
+      if(!rows.length){sc.innerHTML='<div class="empty">Dados insuficientes.</div>';}
+      else{
+        sc.innerHTML=rows.map(r=>{
+          const color=r.rate>=50?'#16a34a':r.rate>=30?'#d97706':'#c0392b';
+          return'<div class="state-row">'
+            +'<div class="state-lbl">'+esc(r.est)+'</div>'
+            +'<div class="state-bar-wrap"><div class="state-bar-fill" style="width:'+r.rate+'%;background:'+color+'"><span>'+r.responded+' resp.</span></div></div>'
+            +'<div class="state-pct" style="color:'+color+'">'+r.rate+'%</div>'
+            +'<div class="state-tot">'+r.total+' env.</div>'
+            +'</div>';
+        }).join('');
+      }
+    }
+  }
+
+  const hours=Array(24).fill(0);
+  contacts.filter(c=>c.sentHour!=null).forEach(c=>hours[c.sentHour]++);
+  const mxH=Math.max(...hours,1);
+  const tc=$id('timeChart');
+  if(tc)tc.innerHTML=[8,9,10,11,12,13,14,15,16,17,18,19].map(h=>'<div class="chart-row"><div class="chart-lbl">'+h+'h</div><div class="chart-bar"><div class="chart-fill" style="width:'+Math.round(hours[h]/mxH*100)+'%"></div></div><div class="chart-val">'+hours[h]+'</div></div>').join('');
+  const scored=contacts.filter(c=>c.done).map(c=>({...c,score:calcScore(c)})).sort((a,b)=>b.score-a.score).slice(0,5);
+  const COL={pendente:'#aaa',respondeu:'#16a34a',interessado:'#d97706',retornar:'#2563eb',nao_quer:'#dc2626',sem_viabilidade:'#7c3aed',fechado:'#7c3aed',errado:'#aaa'};
+  const hl=$id('hotLeads');
+  if(hl)hl.innerHTML=scored.length?scored.map((c,i)=>'<div class="hot-lead"><div class="hot-score">'+['🥇','🥈','🥉','4°','5°'][i]+'</div><div class="hot-info"><div class="hot-name">'+esc(cleanNome(c.nome))+' <span class="estado-badge">'+(c.estado||'?')+'</span></div><div class="hot-sub">'+c.phone+(c.lastContact?' · '+c.lastContact:'')+'</div></div><span class="hot-status" style="background:'+(COL[c.status]||'#aaa')+'22;color:'+(COL[c.status]||'#aaa')+';border:1px solid '+(COL[c.status]||'#aaa')+'44;">'+(STOPTS.find(s=>s.v===c.status)||{l:c.status}).l+'</span><div style="font-size:.7rem;color:var(--taupe);font-weight:700;min-width:28px;text-align:right;">'+c.score+'pt</div></div>').join(''):'<div class="empty">Faça disparos para ver os leads mais quentes</div>';
+
+}
+// ═══ CAMPANHAS ════════════════════════════════════════════
+function renderCamps(){
+  const el=$id('campList');if(!el)return;
+  if(!campaigns.length){el.innerHTML='<div class="empty">Nenhuma campanha criada ainda</div>';setDisplay('campCompare','none');return;}
+  el.innerHTML=campaigns.map(camp=>{
+    const cc=contacts.filter(c=>c.campaign===camp.id),sent=cc.filter(c=>c.done).length,inter=cc.filter(c=>c.status==='interessado').length,conv=sent?Math.round(inter/sent*100):0;
+    return'<div class="camp-card"><div class="camp-dot" style="background:'+camp.color+'"></div><div class="camp-info"><div class="camp-name">'+esc(camp.name)+'</div><div style="font-size:.7rem;color:#aaa">'+camp.createdAt+'</div></div><div class="camp-stats"><span class="camp-stat">👥 '+cc.length+'</span><span class="camp-stat">📤 '+sent+'</span><span class="camp-stat">💰 '+inter+'</span><span class="camp-stat">📊 '+conv+'%</span></div><button class="btn btn-ghost" onclick="deleteCamp(\''+camp.id+'\')" style="font-size:.7rem;padding:4px 8px;">🗑</button></div>';
+  }).join('');
+  if(campaigns.length>1){
+    setDisplay('campCompare','block');
+    $id('campCompareBody').innerHTML=campaigns.map(camp=>{
+      const cc=contacts.filter(c=>c.campaign===camp.id),sent=cc.filter(c=>c.done).length,inter=cc.filter(c=>c.status==='interessado').length,conv=sent?Math.round(inter/sent*100):0;
+      return'<div style="margin-bottom:10px;"><div style="display:flex;justify-content:space-between;"><span style="font-size:.8rem;font-weight:600;display:flex;align-items:center;gap:6px;"><span style="width:10px;height:10px;border-radius:50%;background:'+camp.color+';display:inline-block;"></span>'+esc(camp.name)+'</span><span style="font-size:.75rem;color:var(--taupe);">'+conv+'%</span></div><div style="height:8px;background:var(--gray);border-radius:99px;overflow:hidden;margin-top:4px;"><div style="height:100%;width:'+conv+'%;background:'+camp.color+';border-radius:99px;"></div></div></div>';
+    }).join('');
+  }
+}
+
+// ═══ HOME ═════════════════════════════════════════════════
+// ═══ CONTADOR DIÁRIO ══════════════════════════════════════
+function getDailyKey(){return 'daily_'+today();}
+function getDailySent(){
+  try{return parseInt(localStorage.getItem(getDailyKey())||'0');}catch(e){return 0;}
+}
+function incrementDailySent(){
+  try{
+    const key=getDailyKey();
+    const n=(parseInt(localStorage.getItem(key)||'0'))+1;
+    localStorage.setItem(key,n);
+    renderDailyCounter();
+    return n;
+  }catch(e){return 0;}
+}
+function renderDailyCounter(){
+  const el=$id('dailyCounter');if(!el)return;
+  const n=getDailySent();
+  const limit=80;
+  const pct=Math.min(100,Math.round(n/limit*100));
+  const cls=n>=limit?'danger':n>=60?'warn':'';
+  const msg=n>=limit
+    ?'⛔ Limite atingido! Pare os disparos hoje.'
+    :n>=60?`⚠️ Atenção — ${limit-n} mensagens restantes hoje`
+    :`${limit-n} mensagens disponíveis hoje`;
+  el.innerHTML=`<div class="daily-box ${cls}">
+    <div class="daily-n">${n}</div>
+    <div style="flex:1;">
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+        <span style="font-size:.76rem;font-weight:600;color:var(--black);">Disparadas hoje</span>
+        <span style="font-size:.72rem;color:#aaa;">limite: ${limit}</span>
+      </div>
+      <div class="daily-bar"><div class="daily-fill" style="width:${pct}%"></div></div>
+      <div style="font-size:.72rem;margin-top:4px;color:${n>=limit?'var(--red)':n>=60?'var(--orange)':'var(--taupe)'};">${msg}</div>
+    </div>
+  </div>`;
+}
+
+// ═══ BATCH MODE ═══════════════════════════════════════════
+function toggleBatchMode(){
+  batchMode=!batchMode;
+  selectedLeads.clear();
+  const btn=$id('btnBatch');
+  const bar=$id('batchBar');
+  const sel=$id('batchSelectAll');
+  if(btn)btn.textContent=batchMode?'✕ Cancelar seleção':'☑️ Selecionar em lote';
+  if(btn)btn.style.borderColor=batchMode?'#4f46e5':'';
+  if(btn)btn.style.color=batchMode?'#4f46e5':'';
+  if(bar)bar.style.display=batchMode?'flex':'none';
+  if(sel)sel.style.display=batchMode?'flex':'none';
+  renderCRM();
+}
+function toggleLeadSelection(realIdx){
+  if(selectedLeads.has(realIdx))selectedLeads.delete(realIdx);
+  else selectedLeads.add(realIdx);
+  updateBatchBar();
+  // Toggle visual
+  const card=$id('bcard-'+realIdx);
+  const chk=$id('bchk-'+realIdx);
+  if(card)card.classList.toggle('selected',selectedLeads.has(realIdx));
+  if(chk)chk.classList.toggle('on',selectedLeads.has(realIdx));
+  if(chk)chk.textContent=selectedLeads.has(realIdx)?'✓':'';
+}
+function updateBatchBar(){
+  const n=selectedLeads.size;
+  const cnt=$id('batchCount');
+  if(cnt)cnt.textContent=n+' selecionado'+(n!==1?'s':'');
+}
+function selectAllVisible(){
+  const list=$id('crmList');if(!list)return;
+  list.querySelectorAll('[data-real-idx]').forEach(el=>{
+    const i=parseInt(el.dataset.realIdx);
+    selectedLeads.add(i);
+    el.classList.add('selected');
+    const chk=$id('bchk-'+i);
+    if(chk){chk.classList.add('on');chk.textContent='✓';}
+  });
+  updateBatchBar();
+}
+function clearSelection(){
+  selectedLeads.forEach(i=>{
+    const card=$id('bcard-'+i);const chk=$id('bchk-'+i);
+    if(card)card.classList.remove('selected');
+    if(chk){chk.classList.remove('on');chk.textContent='';}
+  });
+  selectedLeads.clear();
+  updateBatchBar();
+}
+function applyBatchStatus(){
+  const v=$id('batchStatusSel').value;
+  if(!v||!selectedLeads.size){toast('⚠️ Selecione leads e um status.');return;}
+  selectedLeads.forEach(i=>{if(contacts[i])contacts[i].status=v;});
+  saveStorage();
+  toast('✅ Status atualizado em '+selectedLeads.size+' lead(s)!');
+  toggleBatchMode();
+  renderCRM();renderHome();
+}
+function deleteSelected(){
+  if(!selectedLeads.size)return;
+  if(!confirm('Remover '+selectedLeads.size+' lead(s) selecionado(s)?'))return;
+  const toRemove=new Set(selectedLeads);
+  contacts=contacts.filter((_,i)=>!toRemove.has(i));
+  saveStorage();
+  toast('🗑 '+toRemove.size+' lead(s) removido(s).');
+  toggleBatchMode();
+  renderCRM();renderHome();renderDisp();
+}
+function exportSelected(){
+  if(!selectedLeads.size){toast('⚠️ Nenhum lead selecionado.');return;}
+  const rows=[['Nome','Telefone','Estado','Status','Serviço','Último Contato','Retornar em','Anotações']];
+  selectedLeads.forEach(i=>{
+    const c=contacts[i];if(!c)return;
+    rows.push([cleanNome(c.nome),c.phone,c.estado||'?',c.status,c.service||'—',c.lastContact||'',c.nextContact||'',c.notes||'']);
+  });
+  const csv=rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
+  const b=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='leads-selecionados.csv';a.click();
+  toast('📥 '+selectedLeads.size+' leads exportados!');
+}
+
+function renderHome(){
+  const tot=contacts.length,sent=contacts.filter(c=>c.done).length,inter=contacts.filter(c=>c.status==='interessado').length;
+  setTxt('h-tot',tot);setTxt('h-sent',sent);setTxt('h-int',inter);setTxt('h-conv',(sent?Math.round(inter/sent*100):0)+'%');
+  renderAlerts();
+}
+
+function renderAlerts(){
+  const el=$id('homeAlerts');if(!el)return;
+  const todayStr=today();
+  const overdue=contacts.filter(c=>isOD(c));
+  const dueToday=contacts.filter(c=>c.nextContact===todayStr&&!['nao_quer','fechado','sem_viabilidade','errado'].includes(c.status));
+  let html='';
+  if(overdue.length){
+    html+='<div class="alert-card urgent" onclick="goTo(\'crm\');setF(\'overdue\',null)" style="cursor:pointer;">'
+      +'<div class="alert-title">⚠️ '+overdue.length+' lead'+(overdue.length>1?'s':'')+' em atraso — clique para ver</div>'
+      +overdue.slice(0,3).map(c=>'<div class="alert-item"><div class="alert-name">'+esc(cleanNome(c.nome))+' <span class="estado-badge">'+(c.estado||'?')+'</span></div><div class="alert-date">'+c.nextContact+'</div></div>').join('')
+      +(overdue.length>3?'<div style="font-size:.72rem;color:var(--red);margin-top:4px;">+ '+(overdue.length-3)+' outros</div>':'')
+      +'</div>';
+  }
+  if(dueToday.length){
+    html+='<div class="alert-card" onclick="goTo(\'crm\')" style="cursor:pointer;">'
+      +'<div class="alert-title">📅 '+dueToday.length+' para contatar hoje</div>'
+      +dueToday.slice(0,3).map(c=>'<div class="alert-item"><div class="alert-name">'+esc(cleanNome(c.nome))+' <span class="estado-badge">'+(c.estado||'?')+'</span></div>'+(c.service&&c.service!=='—'?'<span class="svc-badge">'+esc(c.service)+'</span>':'')+'</div>').join('')
+      +(dueToday.length>3?'<div style="font-size:.72rem;color:var(--orange);margin-top:4px;">+ '+(dueToday.length-3)+' outros</div>':'')
+      +'</div>';
+  }
+  el.innerHTML=html;
+}
+
+// ═══ SERVIÇO ══════════════════════════════════════════════
+function setService(i,v){contacts[i].service=v;saveStorage();}
+
+// ═══ HISTÓRICO ════════════════════════════════════════════
+function addHistory(i,msg,type){
+  if(!contacts[i].history)contacts[i].history=[];
+  contacts[i].history.unshift({msg:msg.substring(0,120),date:new Date().toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}),type});
+  if(contacts[i].history.length>20)contacts[i].history=contacts[i].history.slice(0,20);
+}
+function toggleHistory(i){
+  const wrap=$id('hist-'+i);if(!wrap)return;
+  const open=wrap.style.display==='none';
+  wrap.style.display=open?'block':'none';
+  if(open) renderHistoryBody(i);
+}
+function renderHistoryBody(i){
+  const el=$id('hist-body-'+i);if(!el)return;
+  const h=contacts[i].history||[];
+  if(!h.length){el.innerHTML='<div style="font-size:.74rem;color:#aaa;padding:8px 0;">Nenhuma mensagem registrada ainda.</div>';return;}
+  const colors={disparo:'var(--taupe)',followup:'#4f46e5',manual:'var(--green)'};
+  const labels={disparo:'Disparo',followup:'Follow Up',manual:'Manual'};
+  el.innerHTML=h.map(x=>'<div class="hist-item">'
+    +'<div class="hist-dot '+x.type+'" style="background:'+colors[x.type]+'"></div>'
+    +'<div style="flex:1;min-width:0;">'
+      +'<div style="font-size:.66rem;color:'+colors[x.type]+';font-weight:700;margin-bottom:2px;">'+labels[x.type]+'</div>'
+      +'<div class="hist-msg">'+esc(x.msg)+'</div>'
+    +'</div>'
+    +'<div class="hist-date">'+x.date+'</div>'
+  +'</div>').join('');
+}
+
+// ═══ TEMPLATES POR SERVIÇO ════════════════════════════════
+function renderTemplates(){
+  const el=$id('tplGrid');if(!el)return;
+  el.innerHTML=Object.entries(SERVICE_TEMPLATES).map(([key,t])=>
+    '<div class="tpl-card" onclick="useTpl(\''+key+'\')"><h5>'+t.icon+' '+key+'</h5><p>'+t.desc+'</p></div>'
+  ).join('');
+}
+function useTpl(key){
+  const t=SERVICE_TEMPLATES[key];if(!t)return;
+  setMode('manual');
+  toast('✅ Template "'+key+'" selecionado!',3500);
+  const mi=$id('mi0');
+  if(mi){
+    const span=mi.querySelector('span');
+    if(span)span.textContent=t.msg.replace('{SAUDACAO}','[saudação]');
+    selVar2(0);
+    VARS[0]=t.msg;
+  }
+}
+function renderAll(){renderHome();renderDailyCounter();if(contacts.length){setDisplay('listSection','block');renderDisp();}}
+
+// ═══ IMPORTAR PLANILHA / LEADS VIEWER ════════════════════
+// Estrutura fixa: A=Nome B=WhatsApp C=Tags D=Estado E=Enviado F=Data
+const LV_COLS={name:0,phone:1,tags:2,estado:3,sent:4,sentDate:5};
+const LV_PAGE_SIZE=100;
+let lvPage=0, lvTotal=0, lvEstado='', lvEstados=[];
+let lvSelected=new Set();
+let lvSearchTimer=null;
+let importWB=null, importSheets=[];
+let _lvMode='supabase'; // 'local' ou 'supabase'
+let _lvLocalFiltered=[];
+
+// ── Modo local — mostra _parsedLeads sem Supabase ─────────
+function renderLocalLeadsTable(){
+  _lvMode='local';
+  const search=($id('lvSearch')?.value||'').toLowerCase();
+  const tag=$id('lvTagSel')?.value||'';
+  const cat=$id('lvCategoriaSel')?.value||'';
+  const statusF=$id('lvStatusSel')?.value||'all';
+  const estat=lvEstado;
+
+  let list=_parsedLeads;
+  if(estat)list=list.filter(l=>l.estado===estat||l.sheet_name===estat);
+  if(search)list=list.filter(l=>(l.nome||'').toLowerCase().includes(search)||(l.tags||'').toLowerCase().includes(search));
+  if(tag)list=list.filter(l=>l.tags===tag);
+  if(cat)list=list.filter(l=>l.categoria===cat);
+  if(statusF==='pending')list=list.filter(l=>!l.done);
+  if(statusF==='sent')list=list.filter(l=>l.done);
+
+  // Ordena: pendentes primeiro, depois por aba e ordem original da planilha
+  list=[...list].sort((a,b)=>{
+    if(a.done!==b.done)return a.done?1:-1;
+    if(a.sheet_name!==b.sheet_name)return(a.sheet_name||'').localeCompare(b.sheet_name||'');
+    return(a.rowIdx||0)-(b.rowIdx||0);
+  });
+  const total=list.length;
+  const from=lvPage*LV_PAGE_SIZE, to=from+LV_PAGE_SIZE;
+  const page=list.slice(from,to);
+  _lvLocalFiltered=list;
+
+  setTxt('lvTotalCount',total.toLocaleString('pt-BR')+' leads');
+  setTxt('lvCount',total+' leads · '+lvSelected.size+' selecionados');
+  setTxt('lvPageInfo',(from+1)+'-'+Math.min(to,total)+' de '+total);
+  const pb=$id('lvBtnPrev'),nb=$id('lvBtnNext');
+  if(pb)pb.disabled=lvPage===0;
+  if(nb)nb.disabled=to>=total;
+
+  // Estado tabs com contador pendentes/total
+  const estados=[...new Set(_parsedLeads.map(l=>l.estado||l.sheet_name).filter(Boolean))].sort();
+  const tabEl=$id('lvEstadoTabs');
+  if(tabEl){
+    // Botão "Todos" hardcoded para evitar bugs com emoji no replace
+    const pendAll=_parsedLeads.filter(l=>!l.done).length;
+    const totAll=_parsedLeads.length;
+    const activeAll=lvEstado==='';
+    const allBtn='<button onclick="lvSetEstado(\'\')" '
+      +'style="padding:7px 14px;border-radius:8px;font-size:.78rem;font-weight:700;cursor:pointer;white-space:nowrap;'
+      +'border:2px solid '+(activeAll?'var(--taupe)':'var(--gray)')+';'
+      +'background:'+(activeAll?'var(--taupe)':'var(--white)')+';'
+      +'color:'+(activeAll?'#fff':'var(--black)')+';margin-top:4px;">'
+      +'📍 Todos <span style="font-size:.65rem;opacity:.75;">('+pendAll+'/'+totAll+')</span></button>';
+
+    const stateBtns=estados.map(e=>{
+      const leads=_parsedLeads.filter(l=>l.estado===e||l.sheet_name===e);
+      const pend=leads.filter(l=>!l.done).length;
+      const tot=leads.length;
+      const active=lvEstado===e;
+      return'<button onclick="lvSetEstado(\''+e+'\')" '
+        +'style="padding:7px 14px;border-radius:8px;font-size:.78rem;font-weight:700;cursor:pointer;white-space:nowrap;'
+        +'border:2px solid '+(active?'var(--taupe)':'var(--gray)')+';'
+        +'background:'+(active?'var(--taupe)':'var(--white)')+';'
+        +'color:'+(active?'#fff':'var(--black)')+';margin-top:4px;">'
+        +e+' <span style="font-size:.65rem;opacity:.75;">('+pend+'/'+tot+')</span></button>';
+    });
+
+    // Preserva o label "Filtrar por estado:" no início
+    tabEl.innerHTML='<div style="font-size:.72rem;font-weight:700;color:var(--taupe);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">🗺️ Selecione o estado para disparar hoje:</div>'
+      +'<div style="display:flex;flex-wrap:wrap;gap:6px;">'
+      +[allBtn,...stateBtns].join('')
+      +'</div>';
+  }
+
+  // Tags
+  const allTags=[...new Set(_parsedLeads.map(l=>l.tags).filter(Boolean))].sort();
+  const ts=$id('lvTagSel');
+  if(ts){const cur=ts.value;ts.innerHTML='<option value="">Todas as tags</option>'+allTags.map(t=>'<option value="'+esc(t)+'"'+(t===cur?' selected':'')+'>'+esc(t)+'</option>').join('');}
+
+  const tbody=$id('lvTableBody');
+  if(!tbody)return;
+  if(!page.length){tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:24px;color:#aaa;">Nenhum lead encontrado</td></tr>';return;}
+
+  tbody.innerHTML=page.map(l=>{
+    const key='local_'+l.phone;
+    const sel=lvSelected.has(key);
+    const sent=l.done;
+    // ENVIADO é clicável — só fica levemente transparente com badge verde
+    return'<tr class="'+(sel?'sel':'')+'" onclick="lvToggleLocal(\''+esc(l.phone)+'\')" style="cursor:pointer;'+(sent?'opacity:.75;':'')+'">'
+      +'<td><div class="import-chk '+(sel?'on':'')+'" id="lvc-'+esc(l.phone)+'">'+(sel?'✓':'')+'</div></td>'
+      +'<td style="font-weight:600;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(cleanNome(l.nome))+'</td>'
+      +'<td style="font-family:monospace;font-size:.72rem;">'+l.phone+'</td>'
+      +'<td style="max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.74rem;color:var(--taupe);">'+esc(l.tags||'—')+'</td>'
+      +'<td><span class="estado-badge">'+esc(l.estado||l.sheet_name||'?')+'</span></td>'
+      +'<td style="font-size:.7rem;color:var(--taupe);">'+esc(l.categoria||'—')+'</td>'
+      +'<td>'+(sent?'<span class="sent-tag">✅ Enviado</span>':'<span style="font-size:.7rem;color:#aaa;">Pendente</span>')+'</td>'
+      +'</tr>';
+  }).join('');
+}
+
+function lvToggleLocal(phone){
+  const key='local_'+phone;
+  if(lvSelected.has(key))lvSelected.delete(key);
+  else lvSelected.add(key);
+  const chk=$id('lvc-'+phone);
+  if(chk){chk.classList.toggle('on',lvSelected.has(key));chk.textContent=lvSelected.has(key)?'✓':'';}
+  const tr=chk?.closest('tr');if(tr)tr.className=lvSelected.has(key)?'sel':'';
+  setTxt('lvSelCount',lvSelected.size);
+  setTxt('lvCount',(_lvLocalFiltered.length||_parsedLeads.length)+' leads · '+lvSelected.size+' selecionados');
+}
+
+
+async function initLeadsViewer(){
+  // Se já tiver leads locais carregados, apenas re-renderiza
+  if(_lvMode==='local'&&_parsedLeads.length>0){
+    setDisplay('importUploadCard','none');
+    setDisplay('leadsViewerCard','block');
+    renderLocalLeadsTable();
+    return;
+  }
+  if(!sbClient){
+    setDisplay('importUploadCard','block');
+    setDisplay('leadsViewerCard','none');
+    const el=$id('importSbStatus');
+    if(el)el.innerHTML='<div style="background:#fdf2f2;border:1px solid #f5c6c6;border-radius:8px;padding:10px;font-size:.76rem;color:var(--red);">❌ Supabase não conectado.</div>';
+    return;
+  }
+  const{count}=await sbClient.from('contacts').select('*',{count:'exact',head:true}).eq('source','planilha');
+  if(count&&count>0){
+    setDisplay('importUploadCard','none');
+    setDisplay('leadsViewerCard','block');
+    await loadEstadoTabs();
+    await loadLeadsPage();
+  }else{
+    setDisplay('importUploadCard','block');
+    setDisplay('leadsViewerCard','none');
+    const el=$id('importSbStatus');
+    if(el)el.innerHTML='<div style="background:#e8f5e9;border:1px solid #a7d7ad;border-radius:8px;padding:10px;font-size:.76rem;color:#15803d;">✅ Supabase conectado. Faça o upload da sua planilha uma única vez abaixo.</div>';
+  }
+}
+
+function showUploadArea(){
+  setDisplay('importUploadCard','block');
+}
+
+// ── Filtro de estados (abas) ──────────────────────────────
+async function loadEstadoTabs(){
+  if(!sbClient)return;
+  // Busca estados distintos
+  const{data}=await sbClient.from('contacts').select('sheet_name').eq('source','planilha').not('sheet_name','is',null).limit(1000);
+  lvEstados=[...new Set((data||[]).map(r=>r.sheet_name).filter(Boolean))].sort();
+  localStorage.setItem('lv_estados',JSON.stringify(lvEstados));
+  renderEstadoTabs();
+}
+
+function renderEstadoTabs(){
+  const el=$id('lvEstadoTabs');if(!el)return;
+  el.innerHTML=['<button class="fb'+(lvEstado===''?' active':'')+'" onclick="lvSetEstado(\'\')">📍 Todos</button>']
+    .concat(lvEstados.map(e=>'<button class="fb'+(lvEstado===e?' active':'')+'" onclick="lvSetEstado(\''+e+'\')">'+e+'</button>'))
+    .join('');
+}
+
+function lvSetEstado(est){
+  lvEstado=est;
+  lvPage=0;
+  lvSelected.clear();
+  setTxt('lvSelCount',0);
+  if(_lvMode==='local'){
+    renderLocalLeadsTable();
+  }else{
+    renderEstadoTabs();
+    loadLeadsPage();
+  }
+}
+
+// ── Carrega página de leads ───────────────────────────────
+async function loadLeadsPage(){
+  if(!sbClient)return;
+  const tbody=$id('lvTableBody');
+  if(tbody)tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:20px;color:#aaa;">🔄 Carregando...</td></tr>';
+
+  const search=($id('lvSearch')?.value||'').trim();
+  const tag=$id('lvTagSel')?.value||'';
+  const cat=$id('lvCategoriaSel')?.value||'';
+  const statusFilter=$id('lvStatusSel')?.value||'all';
+  const from=lvPage*LV_PAGE_SIZE, to=from+LV_PAGE_SIZE-1;
+
+  let q=sbClient.from('contacts').select('*',{count:'exact'}).eq('source','planilha');
+  if(lvEstado) q=q.eq('sheet_name',lvEstado);
+  if(statusFilter==='pending') q=q.eq('done',false);
+  if(statusFilter==='sent') q=q.eq('done',true);
+  if(search) q=q.ilike('nome','%'+search+'%');
+  if(tag) q=q.eq('tags',tag);
+  if(cat) q=q.eq('categoria',cat);
+  q=q.order('sheet_name',{ascending:true}).order('done',{ascending:true}).range(from,to);
+
+  const{data,count,error}=await q;
+  if(error){if(tbody)tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--red);">❌ Erro ao carregar</td></tr>';return;}
+
+  lvTotal=count||0;
+  const totalPages=Math.ceil(lvTotal/LV_PAGE_SIZE);
+  const start=from+1, end=Math.min(to+1,lvTotal);
+
+  setTxt('lvTotalCount',lvTotal.toLocaleString('pt-BR')+' leads');
+  setTxt('lvCount',lvTotal+' leads · '+lvSelected.size+' selecionados');
+  setTxt('lvPageInfo',start+'-'+end+' de '+lvTotal);
+  const pb=$id('lvBtnPrev'),nb=$id('lvBtnNext');
+  if(pb)pb.disabled=lvPage===0;
+  if(nb)nb.disabled=lvPage>=totalPages-1;
+
+  // Atualiza tags e categorias
+  if(lvPage===0&&data){
+    const allTags=[...new Set(data.map(r=>r.tags).filter(Boolean))].sort();
+    const ts=$id('lvTagSel');
+    if(ts){const cur=ts.value;ts.innerHTML='<option value="">Todas as tags</option>'+allTags.map(t=>'<option value="'+esc(t)+'"'+(t===cur?' selected':'')+'>'+esc(t)+'</option>').join('');}
+    // Busca categorias distintas
+    const{data:cats}=await sbClient.from('contacts').select('categoria').eq('source','planilha').not('categoria','is',null);
+    const allCats=[...new Set((cats||[]).map(r=>r.categoria).filter(Boolean))].sort();
+    const cs=$id('lvCategoriaSel');
+    if(cs){const cur=cs.value;cs.innerHTML='<option value="">Categoria</option>'+allCats.map(c=>'<option value="'+esc(c)+'"'+(c===cur?' selected':'')+'>'+esc(c)+'</option>').join('');}
+  }
+
+  if(!data||!data.length){
+    if(tbody)tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:24px;color:#aaa;">Nenhum lead encontrado</td></tr>';
+    return;
+  }
+  if(tbody)tbody.innerHTML=(data||[]).map(c=>{
+    const sel=lvSelected.has(c.id);
+    const sent=c.done||/(enviado)/i.test(c.col_e||'');
+    return'<tr class="'+(sel?'sel':'')+'" onclick="lvToggle(\''+c.id+'\')" style="cursor:pointer;'+(sent?'opacity:.75;':'')+'">'
+      +'<td><div class="import-chk '+(sel?'on':'')+'" id="lvc-'+c.id+'">'+(sel?'✓':'')+'</div></td>'
+      +'<td style="font-weight:600;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(cleanNome(c.nome))+'</td>'
+      +'<td style="font-family:monospace;font-size:.72rem;">'+c.phone+'</td>'
+      +'<td style="max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.74rem;color:var(--taupe);">'+esc(c.tags||'—')+'</td>'
+      +'<td><span class="estado-badge">'+esc(c.estado||c.sheet_name||'?')+'</span></td>'
+      +'<td style="font-size:.7rem;color:var(--taupe);">'+esc(c.categoria||'—')+'</td>'
+      +'<td>'+(sent?'<span class="sent-tag">✅ Enviado</span>'+(c.col_f?'<br><span style="font-size:.65rem;color:#aaa;">'+c.col_f+'</span>':''):'<span style="font-size:.7rem;color:#aaa;">Pendente</span>')+'</td>'
+      +'</tr>';
+  }).join('');
+}
+
+function lvSearchDebounce(){clearTimeout(lvSearchTimer);lvSearchTimer=setTimeout(()=>{lvPage=0;loadLeadsPage();},400);}
+function lvPrevPage(){if(lvPage>0){lvPage--;loadLeadsPage();}}
+function lvNextPage(){lvPage++;loadLeadsPage();}
+function lvToggle(id){
+  if(lvSelected.has(id))lvSelected.delete(id);else lvSelected.add(id);
+  const chk=$id('lvc-'+id);
+  if(chk){chk.classList.toggle('on',lvSelected.has(id));chk.textContent=lvSelected.has(id)?'✓':'';}
+  const tr=chk?.closest('tr');if(tr)tr.className=lvSelected.has(id)?'sel':'';
+  setTxt('lvSelCount',lvSelected.size);
+  setTxt('lvCount',lvTotal+' leads · '+lvSelected.size+' selecionados');
+}
+function lvSelectAllPage(){
+  if(_lvMode==='local'){
+    document.querySelectorAll('#lvTableBody tr:not(.sent)').forEach(tr=>{
+      const chk=tr.querySelector('.import-chk');if(!chk)return;
+      const phone=chk.id.replace('lvc-','');
+      const key='local_'+phone;
+      lvSelected.add(key);chk.classList.add('on');chk.textContent='✓';tr.className='sel';
+    });
+  }else{
+    document.querySelectorAll('#lvTableBody tr:not(.sent)').forEach(tr=>{
+      const chk=tr.querySelector('.import-chk');if(!chk)return;
+      const id=chk.id.replace('lvc-','');
+      lvSelected.add(id);chk.classList.add('on');chk.textContent='✓';tr.className='sel';
+    });
+  }
+  setTxt('lvSelCount',lvSelected.size);
+}
+function lvClearSel(){
+  lvSelected.clear();
+  document.querySelectorAll('#lvTableBody .import-chk.on').forEach(chk=>{
+    chk.classList.remove('on');chk.textContent='';chk.closest('tr').className='';
+  });
+  setTxt('lvSelCount',0);
+}
+
+
+
+
+async function lvSendToDisp(){
+  if(!lvSelected.size){toast('⚠️ Selecione pelo menos um lead.');return;}
+  const campId=$id('dispCamp')?.value||'default';
+  const existingPhones=new Set(contacts.map(c=>c.phone.replace(/\D/g,'')));
+  let added=0,dupes=0;
+
+  if(_lvMode==='local'){
+    lvSelected.forEach(key=>{
+      const phone=key.replace('local_','');
+      const lead=_parsedLeads.find(l=>l.phone===phone);
+      if(!lead)return;
+      const p=lead.phone.replace(/\D/g,'');
+      if(existingPhones.has(p)){dupes++;return;}
+      existingPhones.add(p);
+      const c=mkC(p,lead.nome||p,added,campId);
+      c.estado=lead.estado||lead.sheet_name||getEstado(p);
+      c.service=lead.tags||'—';
+      c.tags=lead.tags||'';
+      c.sheet_name=lead.sheet_name||'';
+      c.categoria=lead.categoria||'';
+      c.xlsxSheetName=lead.sheet_name||'';   // ← para marcar na planilha depois
+      c.xlsxRowIdx=lead.rowIdx||null;         // ← linha exata no xlsx
+      contacts.push(c);added++;
+    });
+  }else{
+    if(!sbClient){toast('❌ Sem conexão com Supabase.');return;}
+    const ids=[...lvSelected];
+    const{data,error}=await sbClient.from('contacts').select('*').in('id',ids);
+    if(error||!data?.length){toast('❌ Erro ao buscar leads.');return;}
+    data.forEach(row=>{
+      const p=row.phone.replace(/\D/g,'');
+      if(existingPhones.has(p)){dupes++;return;}
+      existingPhones.add(p);
+      const c=rowToContact(row);c.campaign=campId;c.varIdx=added;
+      contacts.push(c);added++;
+    });
+  }
+
+  saveStorage();setDisplay('listSection','block');renderDisp();renderHome();
+  goTo('disp');
+  toast('✅ '+added+' leads no Disparador!'+(dupes?' · '+dupes+' já existiam':''));
+  lvSelected.clear();setTxt('lvSelCount',0);
+}
+
+async function refreshLeadsViewer(){await loadEstadoTabs();await loadLeadsPage();}
+
+// ── Upload xlsx → Supabase ────────────────────────────────
+function ensureXLSX(cb){
+  if(typeof XLSX!=='undefined'){cb();return;}
+  const s=document.createElement('script');
+  s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+  s.onload=cb;s.onerror=()=>toast('❌ Sem conexão para carregar a biblioteca.',4000);
+  document.head.appendChild(s);
+}
+
+function handleXlsxFile(file){
+  if(!file)return;
+  const uz=$id('uploadZone');
+  if(uz)uz.innerHTML='<div class="fi">⏳</div><h4>Lendo planilha...</h4><p style="color:var(--taupe);">'+esc(file.name)+'</p><p style="font-size:.72rem;color:#aaa;margin-top:4px;">Aguarde — arquivos grandes podem levar alguns segundos</p>';
+  // setTimeout garante que "Lendo planilha..." aparece ANTES de bloquear a thread com o XLSX
+  setTimeout(()=>ensureXLSX(()=>_parseAndUpload(file)), 80);
+}
+
+
+let _parsedLeads=[], _parsedEstados=[];
+
+function cancelUpload(){
+  _parsedLeads=[];_parsedEstados=[];
+  setDisplay('uploadStep1','block');
+  setDisplay('uploadStep2','none');
+  setDisplay('uploadProgressWrap','none');
+  const uz=$id('uploadZone');
+  if(uz){uz.innerHTML='<div class="fi">📊</div><h4>Suba sua planilha aqui</h4><p>Estrutura: A=Nome · B=WhatsApp · C=Tags · D=Estado · E=Enviado · F=Data</p>';}
+  const inp=$id('xlsxInput');if(inp)inp.value='';
+}
+
+async function startUpload(cat){
+  const categoria=cat||'Geral';
+  if(!_parsedLeads.length){toast('⚠️ Nenhum lead para enviar.');return;}
+  _parsedLeads.forEach(l=>l.categoria=categoria);
+
+  // 1. Mostra a tabela LOCAL imediatamente — não espera Supabase
+  setDisplay('uploadStep2','none');
+  setDisplay('importUploadCard','none');
+  setDisplay('leadsViewerCard','block');
+  _lvMode='local'; // modo local: usa _parsedLeads direto
+  renderLocalLeadsTable();
+
+  // 2. Sobe para Supabase em background (não bloqueia o usuário)
+  if(sbClient){
+    setTimeout(async()=>{
+      const total=_parsedLeads.length;
+      toast('🔄 Salvando '+total.toLocaleString('pt-BR')+' leads no Supabase em background...',3000);
+      await uploadLeadsToSb([..._parsedLeads],_parsedEstados);
+    },500);
+  }
+}
+
+function _showUploadError(msg){
+  const step1=$id('uploadStep1');
+  if(step1)step1.innerHTML='<div style="background:#fdf2f2;border:2px solid var(--red);border-radius:10px;padding:16px;text-align:center;">'
+    +'<div style="font-size:1.4rem;margin-bottom:8px;">❌</div>'
+    +'<div style="font-weight:700;color:var(--red);margin-bottom:6px;">Erro ao ler planilha</div>'
+    +'<div style="font-size:.76rem;color:var(--black);margin-bottom:12px;">'+esc(msg)+'</div>'
+    +'<button onclick="cancelUpload()" class="btn btn-ghost">🔄 Tentar novamente</button>'
+    +'</div>';
+  setDisplay('uploadStep2','none');
+  setDisplay('uploadProgressWrap','none');
+}
+
+function _parseAndUpload(file){
+  if(typeof XLSX==='undefined'){
+    _showUploadError('Biblioteca Excel não carregada. Verifique sua conexão.');
+    return;
+  }
+  const reader=new FileReader();
+  reader.onload=function(e){
+    const arrBuf=e.target.result;
+    _doParseAsync(arrBuf);
+  };
+  reader.onerror=()=>_showUploadError('Erro ao ler o arquivo do disco.');
+  reader.readAsArrayBuffer(file);
+}
+
+function _doParseAsync(arrBuf){
+  const uz=$id('uploadZone');
+  let wb;
+  try{
+    // Opções mínimas = muito mais rápido para arquivos grandes
+    wb=XLSX.read(new Uint8Array(arrBuf),{
+      type:'array',
+      cellDates:false,
+      cellNF:false,
+      cellStyles:false
+    });
+    importWB=wb;
+  }catch(err){
+    _showUploadError('Erro ao abrir o arquivo: '+err.message+'. Verifique se é um .xlsx válido.');
+    return;
+  }
+
+  _parsedLeads=[];
+  _parsedEstados=[];
+  const sheets=wb.SheetNames.filter(n=>wb.Sheets[n]);
+  let shIdx=0;
+
+  function processNextSheet(){
+    if(shIdx>=sheets.length){
+      // Tudo processado
+      if(!_parsedLeads.length){
+        _showUploadError('Nenhum lead encontrado. Verifique se a coluna B (WhatsApp) tem os números.');
+        return;
+      }
+      // Mostra etapa de categoria
+      setDisplay('uploadStep1','none');
+      setDisplay('uploadStep2','block');
+      const info=$id('uploadStep2Info');
+      if(info)info.textContent=
+        _parsedLeads.length.toLocaleString('pt-BR')+' leads de '+_parsedEstados.length+' abas';
+      return;
+    }
+
+    const shName=sheets[shIdx];
+    const ws=wb.Sheets[shName];
+    const ref=ws['!ref'];
+    if(!ref){shIdx++;setTimeout(processNextSheet,0);return;}
+
+    // Progresso no UI
+    if(uz){
+      const h=uz.querySelector('h4');
+      if(h)h.textContent='Processando '+shName+'... ('+shIdx+'/'+sheets.length+')';
+    }
+
+    const range=XLSX.utils.decode_range(ref);
+    let addedInSheet=0;
+
+    // Acessa células diretamente — muito mais rápido que sheet_to_json
+    for(let R=range.s.r+1;R<=range.e.r;R++){
+      const phoneCell=ws[XLSX.utils.encode_cell({r:R,c:1})]; // col B
+      if(!phoneCell)continue;
+      const phone=String(phoneCell.v||'').replace(/\D/g,'');
+      if(!phone||phone.length<8)continue;
+      // Deduplicação — pula se já processamos este telefone
+      if(_seenPhones.has(phone))continue;
+      _seenPhones.add(phone);
+
+      const gV=(col)=>{
+        const cell=ws[XLSX.utils.encode_cell({r:R,c:col})];
+        return cell?String(cell.v||'').trim():'';
+      };
+
+      const estadoRaw=gV(3); // coluna D
+      // Fallback: detecta pelo DDD do telefone se coluna D vazia
+      const estadoFinal=estadoRaw||getEstado(phone)||shName;
+
+      const colE=gV(4);
+      const alreadySent=colE.length>0&&/(enviado|sent)/i.test(colE);
+
+      _parsedLeads.push({
+        id:genId(),
+        phone,
+        nome:gV(0)||phone,
+        tags:gV(2),
+        estado:estadoFinal,
+        col_e:colE,
+        col_f:gV(5),
+        sheet_name:shName,
+        rowIdx:R,            // ← índice da linha no xlsx para marcar depois
+        source:'planilha',
+        categoria:'',
+        status:'pendente',
+        done:alreadySent,
+        service:gV(2)||'—',
+        fu_level:0,fu_msg_idx:{1:-1,2:-1,3:-1},history:[],var_idx:0
+      });
+      addedInSheet++;
+    }
+
+    if(addedInSheet>0)_parsedEstados.push(shName);
+    shIdx++;
+
+    // requestAnimationFrame: dá chance ao browser de respirar entre abas
+    requestAnimationFrame(()=>setTimeout(processNextSheet,0));
+  }
+
+  // Inicia o processamento progressivo
+  const _seenPhones=new Set(); // deduplicação por telefone
+  setTimeout(processNextSheet,50);
+}
+
+async function uploadLeadsToSb(leads,estadosList){
+  if(!sbClient){toast('❌ Supabase não conectado.');return;}
+  const BATCH=500;
+  let done=0;
+  const total=leads.length;
+
+  for(let i=0;i<leads.length;i+=BATCH){
+    const batch=leads.slice(i,i+BATCH);
+    const{error}=await sbClient.from('contacts').upsert(batch,{onConflict:'phone,source'});
+    if(error)console.error('Batch error:',error);
+    done+=batch.length;
+    const pct=Math.round(done/total*100);
+    setTxt('uploadProgressTxt',done.toLocaleString('pt-BR')+' de '+total.toLocaleString('pt-BR')+' leads enviados...');
+    setTxt('uploadProgressPct',pct+'%');
+    const bar=$id('uploadProgressBar');if(bar)bar.style.width=pct+'%';
+  }
+
+  // Salva lista de estados
+  localStorage.setItem('lv_estados',JSON.stringify(estadosList));
+  lvEstados=estadosList;
+
+  setTxt('uploadProgressTxt','✅ '+total.toLocaleString('pt-BR')+' leads salvos no Supabase!');
+  toast('✅ '+total.toLocaleString('pt-BR')+' leads no Supabase!',4000);
+
+  // Mostra o viewer
+  setTimeout(async()=>{
+    setDisplay('importUploadCard','none');
+    setDisplay('leadsViewerCard','block');
+    setDisplay('uploadProgressWrap','none');
+    lvEstado='';
+    renderEstadoTabs();
+    await loadLeadsPage();
+  },1500);
+}
+
+function markXlsxRowSent(sheetName, rowIdx){
+  if(rowIdx==null)return;
+
+  const now=new Date();
+  const dateStr=now.toLocaleDateString('pt-BR')+' '+now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+
+  // ── 1. Atualiza _parsedLeads em memória (sempre, independente do xlsx) ──
+  let updatedPhone=null;
+  if(_parsedLeads.length>0){
+    const lead=_parsedLeads.find(l=>
+      (l.sheet_name===sheetName||(l.rowIdx===rowIdx&&!sheetName))&&l.rowIdx===rowIdx
+    );
+    if(lead){
+      lead.done=true;lead.col_e='ENVIADO';lead.col_f=dateStr;
+      updatedPhone=lead.phone;
+    }
+  }
+
+  // ── 2. Salva no Supabase em background (persiste para próxima sessão) ──
+  if(sbClient&&updatedPhone){
+    sbClient.from('contacts')
+      .update({done:true,col_e:'ENVIADO',col_f:dateStr,sent_at:dateStr})
+      .eq('phone',updatedPhone)
+      .eq('source','planilha')
+      .then(({error})=>{if(error)console.warn('Supabase update:',error);});
+  }
+
+  // ── 2. Atualiza o arquivo xlsx em memória (requer importWB e XLSX) ──
+  if(importWB&&typeof XLSX!=='undefined'){
+    const wsName=sheetName||importWB.SheetNames[0];
+    const ws=importWB.Sheets[wsName];
+    if(ws){
+      const colE=4,colF=5;
+      const verde='C6EFCE';
+      ws[XLSX.utils.encode_cell({r:rowIdx,c:colE})]={
+        v:'ENVIADO',t:'s',
+        s:{fill:{patternType:'solid',fgColor:{rgb:verde}},font:{color:{rgb:'276221'},bold:true}}
+      };
+      ws[XLSX.utils.encode_cell({r:rowIdx,c:colF})]={v:dateStr,t:'s'};
+      const ref=ws['!ref']?XLSX.utils.decode_range(ws['!ref']):{s:{r:0,c:0},e:{r:0,c:0}};
+      if(rowIdx>ref.e.r)ref.e.r=rowIdx;
+      if(colF>ref.e.c)ref.e.c=colF;
+      ws['!ref']=XLSX.utils.encode_range(ref);
+    }
+  }
+
+  // ── 3. Ativa botão de download ──
+  _xlsxModified=true;
+  const dlBtn=$id('btnDownloadXlsx');
+  if(dlBtn){
+    dlBtn.disabled=false;
+    dlBtn.style.background='var(--green)';
+    dlBtn.style.color='#fff';
+    dlBtn.style.borderColor='var(--green)';
+    dlBtn.style.cursor='pointer';
+    const n=_parsedLeads.filter(l=>l.done).length;
+    dlBtn.innerHTML='⬇️ Baixar planilha atualizada <span style="font-size:.65rem;background:rgba(255,255,255,.3);padding:2px 6px;border-radius:99px;">'+n+'</span>';
+  }
+
+  // ── 4. Re-renderiza tabela de leads ──
+  if(_lvMode==='local'&&_parsedLeads.length>0){
+    setTimeout(()=>renderLocalLeadsTable(),200);
+  }
+}
+
+// ═══ AVISO DE SAÍDA SEM SALVAR ═══════════════════════════
+let _xlsxModified=false;
+window.addEventListener('beforeunload',function(e){
+  if(_xlsxModified&&importWB){
+    e.preventDefault();
+    e.returnValue='Você tem envios não salvos na planilha. Baixe o arquivo antes de sair!';
+    return e.returnValue;
+  }
+});
+
+// ═══ WEBHOOKS / CONEXÕES ══════════════════════════════════
+function renderWebhooks(){
+  const el=$id('webhookList');if(!el)return;
+  if(!webhooks.length){el.innerHTML='<p style="font-size:.76rem;color:#aaa;padding:8px 0;">Nenhuma conexão ainda.</p>';return;}
+  el.innerHTML=webhooks.map((w,i)=>
+    '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--gray);border-radius:8px;margin-bottom:6px;">'
+    +'<div style="flex:1;min-width:0;"><div style="font-weight:700;font-size:.8rem;color:var(--black);">'+esc(w.name)+'</div>'
+    +'<div style="font-size:.7rem;color:var(--taupe);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(w.url)+'</div></div>'
+    +'<button onclick="sendToWebhook('+i+')" class="btn btn-green" style="font-size:.72rem;padding:5px 10px;flex-shrink:0;">📤 Enviar</button>'
+    +'<button onclick="removeWebhook('+i+')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:.9rem;flex-shrink:0;">✕</button>'
+    +'</div>'
+  ).join('');
+}
+
+function addWebhook(){
+  const name=($id('whName')?.value||'').trim();
+  const url=($id('whUrl')?.value||'').trim();
+  if(!name||!url){toast('⚠️ Preencha o nome e a URL.');return;}
+  if(!url.startsWith('http')){toast('⚠️ URL inválida.');return;}
+  webhooks.push({id:'w'+Date.now(),name,url});
+  saveStorage();
+  const ni=$id('whName'),ui=$id('whUrl');
+  if(ni)ni.value='';if(ui)ui.value='';
+  renderWebhooks();
+  toast('✅ Conexão adicionada!');
+}
+
+function removeWebhook(i){
+  if(!confirm('Remover conexão "'+webhooks[i]?.name+'"?'))return;
+  webhooks.splice(i,1);
+  saveStorage();renderWebhooks();
+  renderPullSelect();
+}
+
+async function sendToWebhook(i){
+  const w=webhooks[i];if(!w)return;
+  if(!contacts.length){toast('⚠️ Nenhum lead para enviar.');return;}
+  const el=$id('syncStatus');
+  if(el)el.textContent='📤 Enviando...';
+  try{
+    const payload=JSON.stringify({leads:contacts.map(c=>({
+      nome:cleanNome(c.nome),telefone:c.phone,estado:c.estado,
+      status:c.status,service:c.service,notes:c.notes,
+      lastContact:c.lastContact,nextContact:c.nextContact
+    }))});
+    const r=await fetch(w.url,{method:'POST',headers:{'Content-Type':'application/json'},body:payload,mode:'no-cors'});
+    if(el)el.textContent='✅ Enviado para "'+w.name+'" em '+new Date().toLocaleTimeString('pt-BR');
+    toast('✅ Dados enviados para "'+w.name+'"!');
+  }catch(e){
+    if(el)el.textContent='❌ Erro ao enviar: '+e.message;
+    toast('❌ Erro: '+e.message,4000);
+  }
+}
+
+function confirmSync(){
+  const url=($id('sheetsWebhook')?.value||'').trim();
+  if(!url){toast('⚠️ Cole a URL do Apps Script primeiro.');return;}
+  if(!webhooks.find(w=>w.url===url)){
+    webhooks.push({id:'w'+Date.now(),name:'CRM Principal',url});
+    saveStorage();renderWebhooks();renderPullSelect();
+  }
+  sendToWebhookUrl(url);
+}
+
+async function sendToWebhookUrl(url){
+  const el=$id('syncStatus');
+  if(el)el.textContent='📤 Enviando...';
+  try{
+    const payload=JSON.stringify({leads:contacts.map(c=>({
+      nome:cleanNome(c.nome),telefone:c.phone,estado:c.estado,
+      status:c.status,service:c.service,notes:c.notes,
+      lastContact:c.lastContact,nextContact:c.nextContact
+    }))});
+    await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:payload,mode:'no-cors'});
+    if(el)el.textContent='✅ Enviado em '+new Date().toLocaleTimeString('pt-BR');
+    toast('✅ Dados enviados para o Sheets!');
+  }catch(e){
+    if(el)el.textContent='❌ Erro: '+e.message;
+  }
+}
+
+function renderPullSelect(){
+  const el=$id('pullSelect');if(!el)return;
+  el.innerHTML='<option value="">Selecionar planilha...</option>'
+    +webhooks.map((w,i)=>'<option value="'+i+'">'+esc(w.name)+'</option>').join('');
+}
+
+async function pullFromSheet(){
+  const sel=$id('pullSelect');
+  const idx=sel?parseInt(sel.value):-1;
+  if(isNaN(idx)||idx<0||!webhooks[idx]){toast('⚠️ Selecione uma planilha.');return;}
+  const w=webhooks[idx];
+  const st=$id('pullStatus');
+  if(st)st.textContent='🔄 Buscando...';
+  try{
+    const r=await fetch(w.url+'?action=get',{method:'GET'});
+    const d=await r.json();
+    const leads=d.leads||d.contacts||d;
+    if(!Array.isArray(leads)||!leads.length){if(st)st.textContent='⚠️ Nenhum dado retornado.';return;}
+    let added=0;
+    const existingPhones=new Set(contacts.map(c=>c.phone));
+    leads.forEach((row,i)=>{
+      const phone=String(row.telefone||row.phone||row.whatsapp||'').replace(/\D/g,'');
+      if(!phone||existingPhones.has(phone))return;
+      existingPhones.add(phone);
+      contacts.push(mkC(phone,row.nome||phone,i,'default'));
+      added++;
+    });
+    saveStorage();renderAll();
+    if(st)st.textContent='✅ '+added+' leads importados de "'+w.name+'".';
+    toast('✅ '+added+' leads importados!');
+  }catch(e){
+    if(st)st.textContent='❌ Erro: '+e.message;
+    toast('❌ '+e.message,4000);
+  }
+}
+
+function renderLeadsSheetSelect(){
+  const el=$id('leadsSheetSelect');if(!el)return;
+  el.innerHTML='<option value="">Selecionar planilha de leads...</option>'
+    +webhooks.map((w,i)=>'<option value="'+i+'">'+esc(w.name)+'</option>').join('');
+}
+
+async function loadLeadsFromSheet(){
+  const sel=$id('leadsSheetSelect');
+  const idx=sel?parseInt(sel.value):-1;
+  if(isNaN(idx)||idx<0||!webhooks[idx])return;
+  const w=webhooks[idx];
+  const tbl=$id('leadsSheetTable');
+  if(tbl)tbl.innerHTML='<p style="color:var(--taupe);font-size:.76rem;">🔄 Carregando...</p>';
+  try{
+    const r=await fetch(w.url+'?action=getLeads');
+    const d=await r.json();
+    const leads=d.leads||d.contacts||d;
+    if(!Array.isArray(leads)||!leads.length){
+      if(tbl)tbl.innerHTML='<p style="color:#aaa;font-size:.76rem;">Nenhum lead encontrado.</p>';return;
+    }
+    if(tbl)tbl.innerHTML='<p style="font-size:.76rem;color:var(--taupe);">'+leads.length+' leads na planilha.</p>';
+  }catch(e){
+    if(tbl)tbl.innerHTML='<p style="color:var(--red);font-size:.76rem;">❌ Erro: '+e.message+'</p>';
+  }
+}
+
+
+function saveStorage(){
+  try{localStorage.setItem('advshot2',JSON.stringify({contacts,campaigns,webhooks}));}catch(e){}
+  setTimeout(()=>syncToSupabase(),500);
+}
+function loadStorage(){
+  try{
+    const d=localStorage.getItem('advshot2');
+    if(d){const p=JSON.parse(d);contacts=p.contacts||[];campaigns=p.campaigns||[];webhooks=p.webhooks||[];}
+    contacts.forEach(c=>{
+      if(!c.id)c.id=genId();
+      if(!c.estado)c.estado=getEstado(c.phone);
+      if(!c.fuMsgIdx)c.fuMsgIdx={1:-1,2:-1,3:-1};
+      if(!c.history)c.history=[];
+      if(!c.service)c.service='—';
+    });
+    const sw=localStorage.getItem('sheetsWebhook');
+    if(sw&&!webhooks.find(w=>w.url===sw)){webhooks.push({id:'w0',name:'CRM Principal',url:sw});}
+  }catch(e){}
+}
+function exportData(){const b=new Blob([JSON.stringify({contacts,campaigns},null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='advshot-backup.json';a.click();}
+function importData(e){const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>{try{const d=JSON.parse(ev.target.result);contacts=d.contacts||[];campaigns=d.campaigns||[];contacts.forEach(c=>{if(!c.estado)c.estado=getEstado(c.phone);if(!c.fuMsgIdx)c.fuMsgIdx={1:-1,2:-1,3:-1};});saveStorage();populateCampSelect();renderAll();toast('✅ '+contacts.length+' contatos importados!');}catch(err){alert('Arquivo inválido.');}};r.readAsText(f);}
+function exportCSV(){
+  const rows=[['Nome','Telefone','Estado','Status','Campanha','Último Contato','Retornar em','Nível FU','Enviado em','Anotações']];
+  contacts.forEach(c=>{const camp=campaigns.find(cp=>cp.id===c.campaign);rows.push([c.nome,c.phone,c.estado||'?',c.status,camp?camp.name:'—',c.lastContact||'',c.nextContact||'',c.fuLevel,c.sentAt||'',c.notes||'']);});
+  const csv=rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
+  const b=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='advshot-crm.csv';a.click();
+}
+</script>
+</body>
+</html>
