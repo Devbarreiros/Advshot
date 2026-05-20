@@ -553,7 +553,7 @@ body,input,select,textarea,.card,.modal,.ci,.crm-card,.stat-box,.fu-card,.tpl-ca
         <button class="btn btn-ghost btn-full" id="btnSkip" onclick="skipContact()" style="margin-top:6px;font-size:.82rem;letter-spacing:.03em;">⏭ Não / Pular — continuar para o próximo</button>
       </div>
       <div class="info-box">⚠️ O WhatsApp abre com a mensagem preenchida — é só clicar Enviar!</div>
-      <button class="btn btn-ghost" style="width:100%;font-size:.78rem;margin-bottom:8px;" id="btnHideSent" onclick="toggleHideSent()">🙈 Ocultar enviados</button>
+      <button class="btn btn-ghost" style="width:100%;font-size:.78rem;margin-bottom:8px;" id="btnHideSent" onclick="toggleHideSent()">👁 Mostrar enviados</button>
       <div id="contactList"></div>
     </div>
   </div>
@@ -1436,7 +1436,7 @@ let crmF='todos',fuF='todos',fuEstado='todos',crmSearch='',crmSortMode='default'
 let isAuto=false,isPaused=false,cdInterval=null,secsLeft=0,totalSecs=0;
 let cdDeadline=0;
 let batchMode=false, selectedLeads=new Set();
-let hideSent=false;
+let hideSent=true;
 
 // ═══ INIT ═════════════════════════════════════════════════
 (function init(){
@@ -1584,7 +1584,10 @@ function blForceOpen(){
 }
 
 function _doOpenChat(i){
-  if(!canSendByBanGuard())return false;
+  if(!canSendByBanGuard()){
+    // Guard bloqueou — não para o auto, só avisa
+    return false;
+  }
   const w=window.open(buildUrl(contacts[i]),'_blank');
   if(!w||w.closed||typeof w.closed==='undefined'){
     setDisplay('popupWarn','block');return false;
@@ -1774,8 +1777,9 @@ function startAuto(){
   syncAutoButtons();
   setDisplay('cdWrap','block');
   const ok=openChat(i);
-  if(!ok){showNowArea();return;}
+  // Sempre inicia o timer, mesmo que o popup tenha bloqueado ou guard tenha bloqueado
   scheduleNext();
+  if(!ok)showNowArea();
 }
 
 function scheduleNext(){
@@ -2188,10 +2192,21 @@ function formatRemainingTime(ms){const t=Math.ceil(ms/60000),h=Math.floor(t/60),
 
 function canSendByBanGuard(){
   const s=getBanGuardState();
-  if(isBanLocked()){toast('🚫 Bloqueado por ban. Aguarde '+formatRemainingTime(s.lockedUntil-Date.now())+'.',5000);if(isAuto)stopAuto();renderBanGuard();return false;}
+  if(isBanLocked()){
+    toast('🚫 Bloqueado por ban. Aguarde '+formatRemainingTime(s.lockedUntil-Date.now())+'.',5000);
+    return false;
+  }
   const ds=getDailySent(),hs=getHourlySentCount();
-  if(ds>=getCurrentDailyLimit()){toast('⛔ Limite diário atingido. Pare por hoje.',5000);if(isAuto)stopAuto();renderBanGuard();return false;}
-  if(hs>=getCurrentHourlyLimit()){toast('⛔ Limite por hora atingido. Pause 1h.',5000);if(isAuto)stopAuto();renderBanGuard();return false;}
+  if(ds>=getCurrentDailyLimit()){
+    toast('⛔ Limite diário ('+getCurrentDailyLimit()+') atingido. Pause por hoje.',5000);
+    renderBanGuard();
+    return false;
+  }
+  if(hs>=getCurrentHourlyLimit()){
+    toast('⛔ Limite por hora ('+getCurrentHourlyLimit()+') atingido. Aguarde 1h.',5000);
+    renderBanGuard();
+    return false;
+  }
   return true;
 }
 function getBanRiskLevel(){
