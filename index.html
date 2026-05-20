@@ -1586,25 +1586,31 @@ function blForceOpen(){
 function _doOpenChat(i){
   if(!canSendByBanGuard()) return false;
 
-  // Marca como processado imediatamente — some da lista no clique
+  // ── 1. Remove da lista imediatamente (UX fluido) ──────────
   contacts[i].done=true;
   contacts[i].sentAt=new Date().toLocaleString('pt-BR');
   contacts[i].lastContact=today();
   contacts[i].sentHour=nowHour();
   addHistory(i,getMsg(contacts[i].nome,contacts[i].varIdx),'disparo');
-  incrementDailySent();
-  recordSendEvent(contacts[i]);
   hideSent=true;
   const hb=$id('btnHideSent');if(hb)hb.textContent='👁 Mostrar enviados';
-  saveStorage();renderDisp();renderHome();renderBanGuard();
+  renderDisp();renderHome();
 
-  // Abre o WhatsApp
+  // ── 2. Abre o WhatsApp ────────────────────────────────────
   const w=window.open(buildUrl(contacts[i]),'_blank');
-  if(!w||w.closed||typeof w.closed==='undefined'){
-    setDisplay('popupWarn','block');
+  const popupOk=w&&!w.closed&&typeof w.closed!=='undefined';
+  if(!popupOk) setDisplay('popupWarn','block');
+
+  // ── 3. Conta no guard apenas se popup abriu ───────────────
+  if(popupOk){
+    incrementDailySent();
+    recordSendEvent(contacts[i]);
   }
 
-  // Marca no Supabase e planilha em background
+  renderBanGuard();
+  saveStorage();
+
+  // ── 4. Atualiza Supabase e planilha em background ─────────
   if(contacts[i].xlsxSheetName&&contacts[i].xlsxRowIdx!=null){
     markXlsxRowSent(contacts[i].xlsxSheetName,contacts[i].xlsxRowIdx);
   }else if(contacts[i].xlsxRowIdx!=null){
