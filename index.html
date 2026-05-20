@@ -2171,7 +2171,7 @@ function incrementDailySent(){
 var BAN_GUARD_KEY='advshot_ban_guard';
 var SEND_LOG_KEY='advshot_send_log';
 var NORMAL_DAILY_LIMIT=80,RECOVERY_DAILY_LIMIT=20;
-var NORMAL_HOURLY_LIMIT=12,RECOVERY_HOURLY_LIMIT=5;
+var NORMAL_HOURLY_LIMIT=20,NORMAL_HOURLY_WARN=12,RECOVERY_HOURLY_LIMIT=5;
 var RECOVERY_HOURS_AFTER_BAN=72;
 
 function getBanGuardState(){try{return JSON.parse(localStorage.getItem(BAN_GUARD_KEY)||'{}');}catch(e){return{};}}
@@ -2202,15 +2202,24 @@ function canSendByBanGuard(){
   const ds=getDailySent(),hs=getHourlySentCount();
   if(ds>=getCurrentDailyLimit()){
     toast('⛔ Limite diário ('+getCurrentDailyLimit()+') atingido. Pause por hoje.',5000);
-    renderBanGuard();
-    return false;
+    renderBanGuard();return false;
   }
   if(hs>=getCurrentHourlyLimit()){
-    toast('⛔ Limite por hora ('+getCurrentHourlyLimit()+') atingido. Aguarde 1h.',5000);
-    renderBanGuard();
-    return false;
+    toast('⛔ '+hs+' na última hora. Use "Liberar +5" no Guard para continuar.',5000);
+    renderBanGuard();return false;
+  }
+  // Aviso suave entre 12 e 20
+  if(hs>=NORMAL_HOURLY_WARN&&!isRecoveryMode()){
+    toast('⚠️ '+hs+'/'+getCurrentHourlyLimit()+' na última hora — ritmo elevado.',2500);
   }
   return true;
+}
+function releaseBonus(n){
+  // Remove N eventos mais antigos do log para liberar espaço no contador horário
+  const log=getSendLog().sort((a,b)=>a.timestamp-b.timestamp);
+  saveSendLog(log.slice(n));
+  renderBanGuard();renderDailyCounter();
+  toast('✅ +'+n+' liberados! Continue.',3500);
 }
 function getBanRiskLevel(){
   const ds=getDailySent(),hs=getHourlySentCount(),dl=getCurrentDailyLimit(),hl=getCurrentHourlyLimit();
@@ -2261,6 +2270,7 @@ function renderBanGuard(){
     +'<div style="display:flex;gap:6px;flex-wrap:wrap;">'
     +'<button class="btn btn-red" style="font-size:.72rem;" onclick="reportWhatsAppBan(24)">🚫 Fui banido 24h</button>'
     +'<button class="btn" style="font-size:.72rem;background:#f97316;color:#fff;border:none;border-radius:8px;padding:6px 12px;cursor:pointer;" onclick="activateSafeMode()">🟡 Modo seguro</button>'
+    +(hs>=NORMAL_HOURLY_WARN&&!isBanLocked()&&!isRecoveryMode()?'<button class="btn btn-ghost" style="font-size:.72rem;border-color:#16a34a;color:#16a34a;font-weight:700;" onclick="releaseBonus(5)">✅ Liberar +5</button>':'')
     +(isBanLocked()?'<button class="btn btn-ghost" style="font-size:.72rem;" onclick="clearBanGuardLock()">✅ Já voltou</button>':'')
     +'</div></div>';
 }
