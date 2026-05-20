@@ -1786,10 +1786,8 @@ function startAuto(){
   isAuto=true;isPaused=false;cdDeadline=0;
   syncAutoButtons();
   setDisplay('cdWrap','block');
-  const ok=openChat(i);
-  // Sempre inicia o timer, mesmo que o popup tenha bloqueado ou guard tenha bloqueado
+  openChat(i);
   scheduleNext();
-  if(!ok)showNowArea();
 }
 
 function scheduleNext(){
@@ -1802,10 +1800,8 @@ function scheduleNext(){
   cdDeadline=Date.now()+(totalSecs*1000);
   setTxt('iHint','🎲 próximo em '+m+' min');
   hideNowArea();
-  // Atualiza display imediatamente — sem esperar o primeiro tick
   drawCD();
-  // Interval de 500ms — robusto mesmo com throttling do browser
-  cdInterval=setInterval(cdTick,500);
+  cdInterval=setInterval(cdTick,1000);
 }
 
 function cdTick(){
@@ -1814,15 +1810,15 @@ function cdTick(){
   drawCD();
   if(secsLeft<=0){
     clearInterval(cdInterval);
+    playBell();
     const ni=nextP();
     if(ni===-1){stopAuto();toast('✅ Todos os contatos foram abertos!');return;}
     const ok=openChat(ni);
-    if(ok){scheduleNext();}else{
-      // Popup bloqueado — mostra aviso e agenda próxima tentativa em 5s
+    if(ok){
+      scheduleNext();
+    }else{
       showNowArea();
-      setTxt('cdStatus','⚠️ Popup bloqueado — clique em Abrir Agora ou');
-      setTxt('cdTxt','aguarde');
-      setTimeout(()=>{if(isAuto&&!isPaused)scheduleNext();},5000);
+      setTimeout(()=>{if(isAuto&&!isPaused)scheduleNext();},3000);
     }
   }
 }
@@ -2203,26 +2199,43 @@ function formatRemainingTime(ms){const t=Math.ceil(ms/60000),h=Math.floor(t/60),
 function canSendByBanGuard(){
   const s=getBanGuardState();
   if(isBanLocked()){
+    if(isAuto){toast('⚠️ Atenção: conta em bloqueio — use com cautela.',4000);return true;}
     toast('🚫 Bloqueado por ban. Aguarde '+formatRemainingTime(s.lockedUntil-Date.now())+'.',5000);
     return false;
   }
   const ds=getDailySent(),hs=getHourlySentCount();
   if(ds>=getCurrentDailyLimit()){
+    if(isAuto){toast('⚠️ Limite diário atingido — continue com cuidado.',3000);return true;}
     toast('⛔ Limite diário ('+getCurrentDailyLimit()+') atingido. Pause por hoje.',5000);
     renderBanGuard();return false;
   }
   if(hs>=getCurrentHourlyLimit()){
+    if(isAuto){toast('⚠️ '+hs+' na última hora — ritmo alto.',2500);return true;}
     toast('⛔ '+hs+' na última hora. Use "Liberar +5" no Guard para continuar.',5000);
     renderBanGuard();return false;
   }
-  // Aviso suave entre 12 e 20
   if(hs>=NORMAL_HOURLY_WARN&&!isRecoveryMode()){
     toast('⚠️ '+hs+'/'+getCurrentHourlyLimit()+' na última hora — ritmo elevado.',2500);
   }
   return true;
 }
+
+function playBell(){
+  try{
+    const ctx=new(window.AudioContext||window.webkitAudioContext)();
+    const osc=ctx.createOscillator();
+    const gain=ctx.createGain();
+    osc.connect(gain);gain.connect(ctx.destination);
+    osc.type='sine';
+    osc.frequency.setValueAtTime(1200,ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(800,ctx.currentTime+0.3);
+    gain.gain.setValueAtTime(0.5,ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.5);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime+0.5);
+  }catch(e){}
+}
 function releaseBonus(n){
-  // Remove N eventos mais antigos do log para liberar espaço no contador horário
   const log=getSendLog().sort((a,b)=>a.timestamp-b.timestamp);
   saveSendLog(log.slice(n));
   renderBanGuard();renderDailyCounter();
@@ -2296,17 +2309,20 @@ function lvSelectNext(n){
     }
     setTxt('lvSelCount',lvSelected.size);
     renderLocalLeadsTable();
-    toast('☑️ '+added+' leads selecionados');
+    toast(added>0?'☑️ +'+added+' leads selecionados':'ℹ️ Nenhum novo pendente para selecionar',3000);
   }else{
-    // Modo Supabase — XHR para buscar próximos N pendentes
+    // Supabase: busca mais do que já selecionado para pegar novos
+    const offset=lvSelected.size;
     const q={'source':'eq.planilha','done':'eq.false'};
     if(lvEstado)q['sheet_name']='eq.'+lvEstado;
     q['order']='created_at.asc';
-    sbRestGet('contacts',q,[0,n-1]).then(({data})=>{
-      (data||[]).forEach(lead=>lvSelected.add(lead.id));
+    // Busca offset + n para garantir que há leads novos além dos já selecionados
+    sbRestGet('contacts',q,[offset,offset+n-1]).then(({data})=>{
+      const newLeads=(data||[]).filter(l=>!lvSelected.has(l.id)).slice(0,n);
+      newLeads.forEach(l=>lvSelected.add(l.id));
       setTxt('lvSelCount',lvSelected.size);
       loadLeadsPage();
-      toast('☑️ '+(data||[]).length+' leads selecionados');
+      toast(newLeads.length>0?'☑️ +'+newLeads.length+' leads selecionados':'ℹ️ Nenhum novo pendente',3000);
     });
   }
 }
