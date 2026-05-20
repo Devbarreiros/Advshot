@@ -1584,14 +1584,9 @@ function blForceOpen(){
 }
 
 function _doOpenChat(i){
-  if(!canSendByBanGuard()){
-    // Guard bloqueou — não para o auto, só avisa
-    return false;
-  }
-  const w=window.open(buildUrl(contacts[i]),'_blank');
-  if(!w||w.closed||typeof w.closed==='undefined'){
-    setDisplay('popupWarn','block');return false;
-  }
+  if(!canSendByBanGuard()) return false;
+
+  // Marca como processado imediatamente — some da lista no clique
   contacts[i].done=true;
   contacts[i].sentAt=new Date().toLocaleString('pt-BR');
   contacts[i].lastContact=today();
@@ -1599,18 +1594,24 @@ function _doOpenChat(i){
   addHistory(i,getMsg(contacts[i].nome,contacts[i].varIdx),'disparo');
   incrementDailySent();
   recordSendEvent(contacts[i]);
-  // Garante que enviados sempre somem da lista após disparo
   hideSent=true;
   const hb=$id('btnHideSent');if(hb)hb.textContent='👁 Mostrar enviados';
-  // Se veio de importação Excel, marca na planilha
+  saveStorage();renderDisp();renderHome();renderBanGuard();
+
+  // Abre o WhatsApp
+  const w=window.open(buildUrl(contacts[i]),'_blank');
+  if(!w||w.closed||typeof w.closed==='undefined'){
+    setDisplay('popupWarn','block');
+  }
+
+  // Marca no Supabase e planilha em background
   if(contacts[i].xlsxSheetName&&contacts[i].xlsxRowIdx!=null){
     markXlsxRowSent(contacts[i].xlsxSheetName,contacts[i].xlsxRowIdx);
-  } else if(contacts[i].xlsxRowIdx!=null){
+  }else if(contacts[i].xlsxRowIdx!=null){
     markXlsxRowSent(null,contacts[i].xlsxRowIdx);
   }
-  // Marca como enviado no Supabase (para leads vindos do viewer)
   if(contacts[i].id) markLeadSentInSupabase(contacts[i].id);
-  saveStorage();renderDisp();renderHome();renderBanGuard();
+
   return true;
 }
 
