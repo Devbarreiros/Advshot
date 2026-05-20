@@ -1599,6 +1599,9 @@ function _doOpenChat(i){
   addHistory(i,getMsg(contacts[i].nome,contacts[i].varIdx),'disparo');
   incrementDailySent();
   recordSendEvent(contacts[i]);
+  // Garante que enviados sempre somem da lista após disparo
+  hideSent=true;
+  const hb=$id('btnHideSent');if(hb)hb.textContent='👁 Mostrar enviados';
   // Se veio de importação Excel, marca na planilha
   if(contacts[i].xlsxSheetName&&contacts[i].xlsxRowIdx!=null){
     markXlsxRowSent(contacts[i].xlsxSheetName,contacts[i].xlsxRowIdx);
