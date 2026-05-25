@@ -1750,12 +1750,12 @@ function getRandInt(){
 
 function startAuto(){
   const i=nextP();
-  if(i===-1){toast('✅ Todos os contatos já foram enviados!');return;}
-  isAuto=true;isPaused=false;cdDeadline=0;
+  if(i===-1){toast('✅ Todos enviados!');return;}
+  isAuto=true;isPaused=false;
   syncAutoButtons();
   setDisplay('cdWrap','block');
-  const ok=openChat(i);
-  if(!ok){showNowArea();return;}
+  // Abre o primeiro e começa o contador
+  try{_doOpenChat(i);}catch(e){console.warn(e);}
   scheduleNext();
 }
 
@@ -1782,15 +1782,9 @@ function cdTick(){
     playBell();
     const ni=nextP();
     if(ni===-1){stopAuto();toast('✅ Todos os contatos foram abertos!');return;}
-    // Tenta abrir automaticamente
-    const ok=openChat(ni);
-    if(ok){
-      scheduleNext();
-    }else{
-      // Popup bloqueado — mostra botão ABRIR AGORA e aguarda clique
-      showNowArea();
-      toast('🔔 Libere popups no site para abrir automático.',4000);
-    }
+    // Abre o próximo e recomeça o contador
+    try{_doOpenChat(ni);}catch(e){console.warn(e);}
+    scheduleNext();
   }
 }
 
@@ -1864,15 +1858,6 @@ function showNowArea(){
 }
 function hideNowArea(){
   setDisplay('nowArea','none');
-}
-
-function onNowClick(){
-  hideNowArea();
-  const i=nextP();
-  if(i===-1){if(isAuto)stopAuto();return;}
-  const ok=openChat(i);
-  if(ok){if(isAuto)scheduleNext();}
-  else{showNowArea();}
 }
 
 function skipContact(){
