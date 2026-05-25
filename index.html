@@ -1808,13 +1808,21 @@ function onNowClick(){
 }
 
 function _doOpenChat(i){
-  // Abre o WhatsApp PRIMEIRO — só marca como enviado se abrir com sucesso
   const w=window.open(buildUrl(contacts[i]),'_blank');
-  if(!w||w.closed||typeof w.closed==='undefined'){
+  const popupOk=w&&!w.closed&&typeof w.closed!=='undefined';
+
+  if(!popupOk&&!isAuto){
+    // Manual + popup bloqueado — não arquiva, mostra aviso
     setDisplay('popupWarn','block');
-    return false; // não marca como enviado
+    return false;
   }
-  // Popup abriu — agora marca como enviado
+
+  if(!popupOk&&isAuto){
+    // Auto + popup bloqueado — avisa mas não bloqueia o fluxo
+    setDisplay('popupWarn','block');
+  }
+
+  // Arquiva o lead (popup abriu ou é modo automático)
   contacts[i].done=true;
   contacts[i].sentAt=new Date().toLocaleString('pt-BR');
   contacts[i].lastContact=today();
