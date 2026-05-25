@@ -1587,47 +1587,7 @@ function blForceOpen(){
   _blPendingIdx=-1;
 }
 
-function _doOpenChat(i){
-  if(!canSendByBanGuard()) return false;
 
-  // ── 1. Remove da lista imediatamente (UX fluido) ──────────
-  contacts[i].done=true;
-  contacts[i].sentAt=new Date().toLocaleString('pt-BR');
-  contacts[i].lastContact=today();
-  contacts[i].sentHour=nowHour();
-  addHistory(i,getMsg(contacts[i].nome,contacts[i].varIdx),'disparo');
-  hideSent=true;
-  const hb=$id('btnHideSent');if(hb)hb.textContent='👁 Mostrar enviados';
-  renderDisp();renderHome();
-
-  // ── 2. Abre o WhatsApp ────────────────────────────────────
-  const w=window.open(buildUrl(contacts[i]),'_blank');
-  const popupOk=w&&!w.closed&&typeof w.closed!=='undefined';
-  if(!popupOk){
-    setDisplay('popupWarn','block');
-    // Popup bloqueado: retorna false para o timer mostrar "ABRIR AGORA"
-    return false;
-  }
-
-  // ── 3. Conta no guard apenas se popup abriu ───────────────
-  if(popupOk){
-    incrementDailySent();
-    recordSendEvent(contacts[i]);
-  }
-
-  renderBanGuard();
-  saveStorage();
-
-  // ── 4. Atualiza Supabase e planilha em background ─────────
-  if(contacts[i].xlsxSheetName&&contacts[i].xlsxRowIdx!=null){
-    markXlsxRowSent(contacts[i].xlsxSheetName,contacts[i].xlsxRowIdx);
-  }else if(contacts[i].xlsxRowIdx!=null){
-    markXlsxRowSent(null,contacts[i].xlsxRowIdx);
-  }
-  if(contacts[i].id) markLeadSentInSupabase(contacts[i].id);
-
-  return true;
-}
 
 // ═══ DUPLICATAS ═══════════════════════════════════════════
 let _pendingNew=[], _pendingDups=[];
@@ -1794,9 +1754,8 @@ function startAuto(){
   isAuto=true;isPaused=false;cdDeadline=0;
   syncAutoButtons();
   setDisplay('cdWrap','block');
-  const ok=openChat(i);
-  if(!ok){showNowArea();return;}
-  scheduleNext();
+  // Semi-auto: não abre automaticamente — mostra botão para o usuário clicar
+  showNowArea();
 }
 
 function scheduleNext(){
@@ -1820,23 +1779,51 @@ function cdTick(){
   if(secsLeft<=0){
     clearInterval(cdInterval);
     playBell();
-    const ni=nextP();
-    if(ni===-1){stopAuto();toast('✅ Todos os contatos foram abertos!');return;}
-    try{
-      const ok=openChat(ni);
-      if(ok){
-        scheduleNext();
-      }else{
-        showNowArea();
-        setTxt('cdStatus','⚠️ Popup bloqueado — clique em Abrir Agora');
-        setTxt('cdTxt','aguarde');
-        setTimeout(()=>{if(isAuto&&!isPaused)scheduleNext();},5000);
-      }
-    }catch(e){
-      console.error('cdTick error:',e.message);
-      scheduleNext();
-    }
+    // Semi-auto: não abre sozinho — mostra botão ABRIR AGORA
+    showNowArea();
   }
+}
+
+function onNowClick(){
+  hideNowArea();
+  const i=nextP();
+  if(i===-1){if(isAuto)stopAuto();return;}
+  if(!canSendByBanGuard())return;
+  const ok=_doOpenChat(i);
+  if(ok){
+    if(isAuto)scheduleNext();
+  }else{
+    // Popup bloqueado — lead continua pendente, mostra aviso, permite tentar de novo
+    showNowArea();
+    toast('⚠️ Popup bloqueado. Libere popups no browser e tente novamente.',4000);
+  }
+}
+
+function _doOpenChat(i){
+  // Abre o WhatsApp PRIMEIRO — só marca como enviado se abrir com sucesso
+  const w=window.open(buildUrl(contacts[i]),'_blank');
+  if(!w||w.closed||typeof w.closed==='undefined'){
+    setDisplay('popupWarn','block');
+    return false; // não marca como enviado
+  }
+  // Popup abriu — agora marca como enviado
+  contacts[i].done=true;
+  contacts[i].sentAt=new Date().toLocaleString('pt-BR');
+  contacts[i].lastContact=today();
+  contacts[i].sentHour=nowHour();
+  addHistory(i,getMsg(contacts[i].nome,contacts[i].varIdx),'disparo');
+  incrementDailySent();
+  recordSendEvent(contacts[i]);
+  hideSent=true;
+  const hb=$id('btnHideSent');if(hb)hb.textContent='👁 Mostrar enviados';
+  if(contacts[i].xlsxSheetName&&contacts[i].xlsxRowIdx!=null){
+    markXlsxRowSent(contacts[i].xlsxSheetName,contacts[i].xlsxRowIdx);
+  }else if(contacts[i].xlsxRowIdx!=null){
+    markXlsxRowSent(null,contacts[i].xlsxRowIdx);
+  }
+  if(contacts[i].id)markLeadSentInSupabase(contacts[i].id);
+  saveStorage();renderDisp();renderHome();renderBanGuard();
+  return true;
 }
 
 function drawCD(){
