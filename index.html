@@ -1754,8 +1754,9 @@ function startAuto(){
   isAuto=true;isPaused=false;cdDeadline=0;
   syncAutoButtons();
   setDisplay('cdWrap','block');
-  // Semi-auto: não abre automaticamente — mostra botão para o usuário clicar
-  showNowArea();
+  const ok=openChat(i);
+  if(!ok){showNowArea();return;}
+  scheduleNext();
 }
 
 function scheduleNext(){
@@ -1779,8 +1780,17 @@ function cdTick(){
   if(secsLeft<=0){
     clearInterval(cdInterval);
     playBell();
-    // Semi-auto: não abre sozinho — mostra botão ABRIR AGORA
-    showNowArea();
+    const ni=nextP();
+    if(ni===-1){stopAuto();toast('✅ Todos os contatos foram abertos!');return;}
+    // Tenta abrir automaticamente
+    const ok=openChat(ni);
+    if(ok){
+      scheduleNext();
+    }else{
+      // Popup bloqueado — mostra botão ABRIR AGORA e aguarda clique
+      showNowArea();
+      toast('🔔 Libere popups no site para abrir automático.',4000);
+    }
   }
 }
 
@@ -1788,14 +1798,12 @@ function onNowClick(){
   hideNowArea();
   const i=nextP();
   if(i===-1){if(isAuto)stopAuto();return;}
-  if(!canSendByBanGuard())return;
-  const ok=_doOpenChat(i);
+  const ok=openChat(i);
   if(ok){
     if(isAuto)scheduleNext();
   }else{
-    // Popup bloqueado — lead continua pendente, mostra aviso, permite tentar de novo
     showNowArea();
-    toast('⚠️ Popup bloqueado. Libere popups no browser e tente novamente.',4000);
+    toast('⚠️ Popup ainda bloqueado. Libere nas configurações do browser.',4000);
   }
 }
 
