@@ -2643,7 +2643,8 @@ function sbXHR(method,path,body,extraHeaders){
     xhr.open(method,SB_URL+'/rest/v1/'+path);
     xhr.setRequestHeader('apikey',SB_KEY);
     xhr.setRequestHeader('Authorization','Bearer '+SB_KEY);
-    xhr.setRequestHeader('Content-Type','application/json');
+    // Content-Type só para POST/PATCH/PUT — não enviar em GET
+    if(method!=='GET')xhr.setRequestHeader('Content-Type','application/json');
     if(!extraHeaders||!extraHeaders['Prefer'])xhr.setRequestHeader('Prefer','count=exact');
     if(extraHeaders)Object.entries(extraHeaders).forEach(([k,v])=>xhr.setRequestHeader(k,v));
     xhr.timeout=15000;
@@ -2661,11 +2662,17 @@ function sbXHR(method,path,body,extraHeaders){
   });
 }
 async function sbRestGet(table,query,range){
-  let path=table+'?select=*';
-  if(query)Object.entries(query).forEach(([k,v])=>{if(v!==undefined&&v!==null&&v!=='')path+='&'+k+'='+encodeURIComponent(String(v));});
-  if(range){path+='&limit='+(range[1]-range[0]+1)+'&offset='+range[0];}
-  const r=await sbXHR('GET',path);
-  return{data:r.data,count:r.count,error:r.ok?null:'HTTP '+r.status};
+  try{
+    let path=table+'?select=*';
+    if(query)Object.entries(query).forEach(([k,v])=>{
+      if(v!==undefined&&v!==null&&v!=='')path+='&'+k+'='+encodeURIComponent(String(v));
+    });
+    // Range header para paginação + count=exact para total — formato correto do PostgREST
+    const headers={'Prefer':'count=exact'};
+    if(range)headers['Range']=range[0]+'-'+range[1];
+    const r=await sbXHR('GET',path,null,headers);
+    return{data:r.data,count:r.count,error:r.ok?null:'HTTP '+r.status};
+  }catch(e){return{data:[],count:0,error:e.message};}
 }
 async function sbRestGetDistinct(table,col,filter){
   let path=table+'?select='+col+'&limit=5000';
@@ -2748,7 +2755,6 @@ function lvSetEstado(est){
 
 // ── Carrega página de leads ───────────────────────────────
 async function loadLeadsPage(){
-  if(!sbClient)return;
   const tbody=$id('lvTableBody');
   if(tbody)tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:20px;color:#aaa;">🔄 Carregando...</td></tr>';
 
@@ -2758,45 +2764,24 @@ async function loadLeadsPage(){
   const statusFilter=$id('lvStatusSel')?.value||'all';
   const from=lvPage*LV_PAGE_SIZE, to=from+LV_PAGE_SIZE-1;
 
-  try{
-    let q=sbClient.from('contacts').select('*',{count:'exact'}).eq('source','planilha');
-    if(lvEstado) q=q.eq('sheet_name',lvEstado);
-    if(statusFilter==='pending') q=q.eq('done',false);
-    if(statusFilter==='sent') q=q.eq('done',true);
-    if(search) q=q.ilike('nome','%'+search+'%');
-    if(tag) q=q.eq('tags',tag);
-    if(cat) q=q.eq('categoria',cat);
-    q=q.order('sheet_name',{ascending:true}).order('done',{ascending:true}).range(from,to);
+  // XHR direto — evita DataCloneError do sbClient em chamadas repetidas
+  const q={source:'eq.planilha'};
+  if(lvEstado)q.sheet_name='eq.'+lvEstado;
+  if(statusFilter==='pending')q.done='eq.false';
+  if(statusFilter==='sent')q.done='eq.true';
+  if(search)q.nome='ilike.*'+search+'*';
+  if(tag)q.tags='eq.'+tag;
+  if(cat)q.categoria='eq.'+cat;
+  q.order='done.asc';
 
-    const{data,count,error}=await q;
-    if(error)throw new Error(error.message||'query error');
-    _renderLeadsRows(tbody,data,count,from,to);
-    // Atualiza tags e categorias
-    if(lvPage===0&&data){
-      const allTags=[...new Set(data.map(r=>r.tags).filter(Boolean))].sort();
-      const ts=$id('lvTagSel');
-      if(ts){const cur=ts.value;ts.innerHTML='<option value="">Todas as tags</option>'+allTags.map(t=>'<option value="'+esc(t)+'"'+(t===cur?' selected':'')+'>'+esc(t)+'</option>').join('');}
-      try{
-        const{data:cats}=await sbClient.from('contacts').select('categoria').eq('source','planilha').not('categoria','is',null);
-        const allCats=[...new Set((cats||[]).map(r=>r.categoria).filter(Boolean))].sort();
-        const cs=$id('lvCategoriaSel');
-        if(cs){const cur=cs.value;cs.innerHTML='<option value="">Categoria</option>'+allCats.map(c=>'<option value="'+esc(c)+'"'+(c===cur?' selected':'')+'>'+esc(c)+'</option>').join('');}
-      }catch(e){}
-    }
-  }catch(e){
-    // Fallback: XHR direto
-    const q2={'source':'eq.planilha'};
-    if(lvEstado)q2['sheet_name']='eq.'+lvEstado;
-    if(statusFilter==='pending')q2['done']='eq.false';
-    if(statusFilter==='sent')q2['done']='eq.true';
-    if(search)q2['nome']='ilike.*'+search+'*';
-    if(tag)q2['tags']='eq.'+tag;
-    if(cat)q2['categoria']='eq.'+cat;
-    q2['order']='done.asc';
-    const{data,count,error:e2}=await sbRestGet('contacts',q2,[from,to]);
-    if(e2){if(tbody)tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--red);">❌ Erro ao carregar. Verifique conexão.</td></tr>';return;}
-    _renderLeadsRows(tbody,data,count,from,to);
+  const{data,count,error}=await sbRestGet('contacts',q,[from,to]);
+
+  if(error){
+    if(tbody)tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--red);font-size:.78rem;">❌ Erro: '+esc(String(error))+'</td></tr>';
+    return;
   }
+
+  _renderLeadsRows(tbody,data,count,from,to);
 }
 
 function _renderLeadsRows(tbody,data,count,from,to){
