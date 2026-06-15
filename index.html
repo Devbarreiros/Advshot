@@ -798,9 +798,9 @@ body,input,select,textarea,.card,.modal,.ci,.crm-card,.stat-box,.fu-card,.tpl-ca
         </div>
         <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
           <input type="text" id="lvSearch" placeholder="🔍 Buscar por nome ou tag..." oninput="lvSearchDebounce()" style="flex:1;min-width:160px;">
-          <select id="lvCategoriaSel" onchange="lvPage=0;loadLeadsPage()" style="min-width:100px;"><option value="">Categoria</option></select>
-          <select id="lvTagSel" onchange="lvPage=0;loadLeadsPage()" style="min-width:120px;"><option value="">Todas as tags</option></select>
-          <select id="lvStatusSel" onchange="lvPage=0;loadLeadsPage()">
+          <select id="lvCategoriaSel" onchange="lvFilterChanged()" style="min-width:100px;"><option value="">Categoria</option></select>
+          <select id="lvTagSel" onchange="lvFilterChanged()" style="min-width:120px;"><option value="">Todas as tags</option></select>
+          <select id="lvStatusSel" onchange="lvFilterChanged()">
             <option value="all">Todos</option>
             <option value="pending">⏳ Pendentes</option>
             <option value="sent">✅ Enviados</option>
@@ -2826,9 +2826,18 @@ function _renderLeadsRows(tbody,data,count,from,to){
   }).join('');
 }
 
-function lvSearchDebounce(){clearTimeout(lvSearchTimer);lvSearchTimer=setTimeout(()=>{lvPage=0;loadLeadsPage();},400);}
-function lvPrevPage(){if(lvPage>0){lvPage--;loadLeadsPage();}}
-function lvNextPage(){lvPage++;loadLeadsPage();}
+function reloadLeadsViewer(){
+  if(_lvMode==='local'){renderLocalLeadsTable();return;}
+  loadLeadsPage();
+}
+function lvSearchDebounce(){clearTimeout(lvSearchTimer);lvSearchTimer=setTimeout(()=>{lvPage=0;reloadLeadsViewer();},400);}
+function lvPrevPage(){if(lvPage>0){lvPage--;reloadLeadsViewer();}}
+function lvNextPage(){
+  const total=_lvMode==='local'?(_lvLocalFiltered||_parsedLeads).length:lvTotal;
+  const totalPages=Math.ceil(total/LV_PAGE_SIZE);
+  if(lvPage<totalPages-1){lvPage++;reloadLeadsViewer();}
+}
+function lvFilterChanged(){lvPage=0;reloadLeadsViewer();}
 function lvToggle(id){
   if(lvSelected.has(id))lvSelected.delete(id);else lvSelected.add(id);
   const chk=$id('lvc-'+id);
