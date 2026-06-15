@@ -2748,7 +2748,6 @@ function lvSetEstado(est){
 
 // ── Carrega página de leads ───────────────────────────────
 async function loadLeadsPage(){
-  if(!sbClient)return;
   const tbody=$id('lvTableBody');
   if(tbody)tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:20px;color:#aaa;">🔄 Carregando...</td></tr>';
 
@@ -2756,49 +2755,43 @@ async function loadLeadsPage(){
   const tag=$id('lvTagSel')?.value||'';
   const cat=$id('lvCategoriaSel')?.value||'';
   const statusFilter=$id('lvStatusSel')?.value||'all';
-  const from=lvPage*LV_PAGE_SIZE, to=from+LV_PAGE_SIZE-1;
+  const from=lvPage*LV_PAGE_SIZE;
 
-  function applyFilters(q){
-    q=q.eq('source','planilha');
-    if(lvEstado) q=q.eq('sheet_name',lvEstado);
-    if(statusFilter==='pending') q=q.eq('done',false);
-    if(statusFilter==='sent') q=q.eq('done',true);
-    if(search) q=q.ilike('nome','%'+search+'%');
-    if(tag) q=q.eq('tags',tag);
-    if(cat) q=q.eq('categoria',cat);
-    return q;
-  }
+  // Filtros base
+  let filters='source=eq.planilha';
+  if(lvEstado) filters+='&sheet_name=eq.'+encodeURIComponent(lvEstado);
+  if(statusFilter==='pending') filters+='&done=eq.false';
+  if(statusFilter==='sent') filters+='&done=eq.true';
+  if(search) filters+='&nome=ilike.*'+encodeURIComponent(search)+'*';
+  if(tag) filters+='&tags=eq.'+encodeURIComponent(tag);
+  if(cat) filters+='&categoria=eq.'+encodeURIComponent(cat);
+
+  const baseUrl=SB_URL+'/rest/v1/contacts?'+filters;
+  const hdrs={'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY};
 
   try{
-    // Query 1: count apenas (head:true = sem dados, só o total)
+    // 1. Contagem — HEAD request (sem corpo, só o total no header)
     if(lvPage===0||lvTotal===0){
-      const cq=applyFilters(sbClient.from('contacts').select('*',{count:'exact',head:true}));
-      const{count:total,error:ce}=await cq;
-      if(!ce) lvTotal=total||0;
+      const cr_resp=await fetch(baseUrl+'&select=*',{method:'HEAD',headers:{...hdrs,'Prefer':'count=exact'}});
+      const cr=cr_resp.headers.get('content-range');
+      if(cr) lvTotal=parseInt(cr.split('/')[1]||'0')||0;
     }
 
-    // Query 2: dados sem count (sem Prefer:count=exact, sem conflito de Range)
-    let dq=applyFilters(sbClient.from('contacts').select('*'));
-    dq=dq.order('sheet_name',{ascending:true}).order('done',{ascending:true}).range(from,to);
-    const{data,error}=await dq;
+    // 2. Dados — GET sem Prefer:count=exact para não interferir na resposta
+    const dataResp=await fetch(baseUrl+'&select=*&order=done.asc&limit='+LV_PAGE_SIZE+'&offset='+from,{headers:hdrs});
+    if(!dataResp.ok)throw new Error('HTTP '+dataResp.status);
+    const data=await dataResp.json();
 
-    if(error)throw new Error(error.message);
-    _renderLeadsRows(tbody,data,lvTotal,from,to);
+    _renderLeadsRows(tbody,Array.isArray(data)?data:[],lvTotal,from,from+LV_PAGE_SIZE-1);
 
-    if(lvPage===0&&data){
+    if(lvPage===0&&Array.isArray(data)&&data.length){
       const allTags=[...new Set(data.map(r=>r.tags).filter(Boolean))].sort();
       const ts=$id('lvTagSel');
       if(ts){const cur=ts.value;ts.innerHTML='<option value="">Todas as tags</option>'+allTags.map(t=>'<option value="'+esc(t)+'"'+(t===cur?' selected':'')+'>'+esc(t)+'</option>').join('');}
-      try{
-        const{data:cats}=await sbClient.from('contacts').select('categoria').eq('source','planilha').not('categoria','is',null);
-        const allCats=[...new Set((cats||[]).map(r=>r.categoria).filter(Boolean))].sort();
-        const cs=$id('lvCategoriaSel');
-        if(cs){const cur=cs.value;cs.innerHTML='<option value="">Categoria</option>'+allCats.map(c=>'<option value="'+esc(c)+'"'+(c===cur?' selected':'')+'>'+esc(c)+'</option>').join('');}
-      }catch(e){}
     }
   }catch(e){
-    console.error('loadLeadsPage error:',e);
-    if(tbody)tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--red);font-size:.72rem;">❌ '+esc(e?.message||e?.code||String(e))+'</td></tr>';
+    console.error('loadLeadsPage:',e);
+    if(tbody)tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--red);font-size:.72rem;">❌ '+esc(e?.message||String(e))+'</td></tr>';
   }
 }
 
