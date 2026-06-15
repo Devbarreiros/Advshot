@@ -592,6 +592,7 @@ body,input,select,textarea,.card,.modal,.ci,.crm-card,.stat-box,.fu-card,.tpl-ca
       </div>
       <div class="filter-row">
         <button class="fb active" onclick="setF('todos',event)">Todos</button>
+        <button class="fb" onclick="setF('hoje',event)">📅 Hoje</button>
         <button class="fb" onclick="setF('pendente',event)">⏳</button>
         <button class="fb" onclick="setF('respondeu',event)">✅</button>
         <button class="fb" onclick="setF('interessado',event)">💰</button>
@@ -1984,6 +1985,7 @@ function renderCRM(){
   setTxt('r-od',od);setTxt('r-int',int);setTxt('r-ret',ret);setTxt('r-no',no);
   let list=contacts;
   if(crmF==='overdue')list=contacts.filter(c=>isOD(c));
+  else if(crmF==='hoje')list=contacts.filter(c=>c.done&&c.lastContact===today());
   else if(crmF!=='todos')list=contacts.filter(c=>c.status===crmF);
   if(crmSearch)list=list.filter(c=>(c.nome||'').toLowerCase().includes(crmSearch)||(c.phone||'').includes(crmSearch));
   list=sortContacts(list);
@@ -2421,19 +2423,21 @@ function applyBatchStatus(){
   renderCRM();renderHome();
 }
 function markRestAsNotResponded(){
-  // Marca como "Não respondeu" todos os leads enviados (done=true) que NÃO estão selecionados
-  // e que ainda estão como "pendente" (não têm resposta nem interesse registrado)
+  // Se filtro "hoje" ativo: só afeta disparados hoje. Senão: todos os enviados.
+  const somenteHoje=crmF==='hoje';
   const eligibleStatuses=['pendente','nao_respondeu'];
   let count=0;
   contacts.forEach((c,i)=>{
-    if(c.done && !selectedLeads.has(i) && eligibleStatuses.includes(c.status||'pendente')){
-      c.status='nao_respondeu';
-      count++;
-    }
+    if(!c.done)return;
+    if(selectedLeads.has(i))return; // selecionados = responderam
+    if(somenteHoje&&c.lastContact!==today())return; // só de hoje se filtro ativo
+    if(!eligibleStatuses.includes(c.status||'pendente'))return;
+    c.status='nao_respondeu';
+    count++;
   });
-  if(!count){toast('ℹ️ Nenhum lead elegível encontrado (somente enviados e pendentes são afetados).');return;}
+  if(!count){toast('ℹ️ Nenhum lead elegível encontrado.');return;}
   saveStorage();
-  toast('🔇 '+count+' leads marcados como "Não respondeu".',4000);
+  toast('🔇 '+count+' leads marcados como "Não respondeu"'+(somenteHoje?' (disparados hoje)':'')+'.',4000);
   toggleBatchMode();
   renderCRM();renderHome();
 }
