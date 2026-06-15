@@ -1376,7 +1376,7 @@ function loadTheme(){
 
 // ═══ UTILITÁRIOS ════════════════════════════════════════
 function getSaudacao(){const h=new Date().getHours();return h>=5&&h<12?'Bom dia':h>=12&&h<18?'Boa tarde':'Boa noite';}
-function today(){return new Date().toISOString().split('T')[0];}
+function today(){const n=new Date();return new Date(n.getTime()-n.getTimezoneOffset()*60000).toISOString().slice(0,10);}
 function nowHour(){return new Date().getHours();}
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function applyVars(t,n){if(!t)return'';return t.replace(/\{NOME\}/g,n||'').replace(/\{SAUDACAO\}/g,getSaudacao());}
@@ -1703,26 +1703,19 @@ function closeMsgPicker(){
 }
 
 function sendPickedMsg(varIdx){
+  const i=_pickerIdx;   // salva ANTES de closeMsgPicker() zerar _pickerIdx
   closeMsgPicker();
-  const i = _pickerIdx;
-  if(i === -1) return;
-  const c = contacts[i];
-  const dn = cleanNome(c.nome);
-  const msg = RETOMADA_VARS[varIdx]
-    .replace(/\{NOME\}/g, dn)
-    .replace(/\{SAUDACAO\}/g, getSaudacao());
-  const w = window.open('https://wa.me/'+c.phone+'?text='+encodeURIComponent(msg),'_blank');
-  if(!w||w.closed||typeof w.closed==='undefined'){
-    setDisplay('popupWarn','block');
-    return;
-  }
-  contacts[i].done = true;
-  contacts[i].sentAt = new Date().toLocaleString('pt-BR');
-  contacts[i].lastContact = today();
-  contacts[i].sentHour = nowHour();
-  addHistory(i, msg, 'disparo');
+  if(i===-1)return;
+  const c=contacts[i];
+  const dn=cleanNome(c.nome);
+  const msg=RETOMADA_VARS[varIdx].replace(/\{NOME\}/g,dn).replace(/\{SAUDACAO\}/g,getSaudacao());
+  const w=window.open('https://wa.me/'+c.phone+'?text='+encodeURIComponent(msg),'_blank');
+  if(!w||w.closed||typeof w.closed==='undefined'){setDisplay('popupWarn','block');return;}
+  contacts[i].done=true;contacts[i].sentAt=new Date().toLocaleString('pt-BR');
+  contacts[i].lastContact=today();contacts[i].sentHour=nowHour();
+  addHistory(i,msg,'disparo');incrementDailySent();recordSendEvent(contacts[i]);
   saveStorage();renderDisp();renderHome();
-  if(isAuto) scheduleNext();
+  if(isAuto)scheduleNext();
 }
 
 // ═══ LIMPAR E OCULTAR ═════════════════════════════════════
@@ -2653,7 +2646,7 @@ function sbXHR(method,path,body,extraHeaders){
         const d=xhr.responseText?JSON.parse(xhr.responseText):null;
         const cr=xhr.getResponseHeader('content-range');
         const count=cr?parseInt(cr.split('/')[1]||'0'):0;
-        resolve({data:Array.isArray(d)?d:[],count,ok:xhr.status<300,status:xhr.status});
+        resolve({data:Array.isArray(d)?d:[],count,ok:xhr.status<300||xhr.status===206,status:xhr.status});
       }catch(e){resolve({data:[],count:0,ok:false});}
     };
     xhr.onerror=()=>resolve({data:[],count:0,ok:false,error:'network'});
@@ -2665,12 +2658,12 @@ async function sbRestGet(table,query,range){
   try{
     let path=table+'?select=*';
     if(query)Object.entries(query).forEach(([k,v])=>{
-      if(v!==undefined&&v!==null&&v!=='')path+='&'+k+'='+encodeURIComponent(String(v));
+      if(v!==undefined&&v!==null&&v!=='')path+='&'+encodeURIComponent(k)+'='+encodeURIComponent(String(v));
     });
-    // Range header para paginação + count=exact para total — formato correto do PostgREST
-    const headers={'Prefer':'count=exact'};
-    if(range)headers['Range']=range[0]+'-'+range[1];
-    const r=await sbXHR('GET',path,null,headers);
+    if(range){
+      path+='&limit='+(range[1]-range[0]+1)+'&offset='+range[0];
+    }
+    const r=await sbXHR('GET',path,null,{'Prefer':'count=exact'});
     return{data:r.data,count:r.count,error:r.ok?null:'HTTP '+r.status};
   }catch(e){return{data:[],count:0,error:e.message};}
 }
@@ -2755,6 +2748,7 @@ function lvSetEstado(est){
 
 // ── Carrega página de leads ───────────────────────────────
 async function loadLeadsPage(){
+  if(!sbClient)return;
   const tbody=$id('lvTableBody');
   if(tbody)tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:20px;color:#aaa;">🔄 Carregando...</td></tr>';
 
@@ -2764,24 +2758,48 @@ async function loadLeadsPage(){
   const statusFilter=$id('lvStatusSel')?.value||'all';
   const from=lvPage*LV_PAGE_SIZE, to=from+LV_PAGE_SIZE-1;
 
-  // XHR direto — evita DataCloneError do sbClient em chamadas repetidas
-  const q={source:'eq.planilha'};
-  if(lvEstado)q.sheet_name='eq.'+lvEstado;
-  if(statusFilter==='pending')q.done='eq.false';
-  if(statusFilter==='sent')q.done='eq.true';
-  if(search)q.nome='ilike.*'+search+'*';
-  if(tag)q.tags='eq.'+tag;
-  if(cat)q.categoria='eq.'+cat;
-  q.order='done.asc';
-
-  const{data,count,error}=await sbRestGet('contacts',q,[from,to]);
-
-  if(error){
-    if(tbody)tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--red);font-size:.78rem;">❌ Erro: '+esc(String(error))+'</td></tr>';
-    return;
+  function applyFilters(q){
+    q=q.eq('source','planilha');
+    if(lvEstado) q=q.eq('sheet_name',lvEstado);
+    if(statusFilter==='pending') q=q.eq('done',false);
+    if(statusFilter==='sent') q=q.eq('done',true);
+    if(search) q=q.ilike('nome','%'+search+'%');
+    if(tag) q=q.eq('tags',tag);
+    if(cat) q=q.eq('categoria',cat);
+    return q;
   }
 
-  _renderLeadsRows(tbody,data,count,from,to);
+  try{
+    // Query 1: count apenas (head:true = sem dados, só o total)
+    if(lvPage===0||lvTotal===0){
+      const cq=applyFilters(sbClient.from('contacts').select('*',{count:'exact',head:true}));
+      const{count:total,error:ce}=await cq;
+      if(!ce) lvTotal=total||0;
+    }
+
+    // Query 2: dados sem count (sem Prefer:count=exact, sem conflito de Range)
+    let dq=applyFilters(sbClient.from('contacts').select('*'));
+    dq=dq.order('sheet_name',{ascending:true}).order('done',{ascending:true}).range(from,to);
+    const{data,error}=await dq;
+
+    if(error)throw new Error(error.message);
+    _renderLeadsRows(tbody,data,lvTotal,from,to);
+
+    if(lvPage===0&&data){
+      const allTags=[...new Set(data.map(r=>r.tags).filter(Boolean))].sort();
+      const ts=$id('lvTagSel');
+      if(ts){const cur=ts.value;ts.innerHTML='<option value="">Todas as tags</option>'+allTags.map(t=>'<option value="'+esc(t)+'"'+(t===cur?' selected':'')+'>'+esc(t)+'</option>').join('');}
+      try{
+        const{data:cats}=await sbClient.from('contacts').select('categoria').eq('source','planilha').not('categoria','is',null);
+        const allCats=[...new Set((cats||[]).map(r=>r.categoria).filter(Boolean))].sort();
+        const cs=$id('lvCategoriaSel');
+        if(cs){const cur=cs.value;cs.innerHTML='<option value="">Categoria</option>'+allCats.map(c=>'<option value="'+esc(c)+'"'+(c===cur?' selected':'')+'>'+esc(c)+'</option>').join('');}
+      }catch(e){}
+    }
+  }catch(e){
+    console.error('loadLeadsPage error:',e);
+    if(tbody)tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--red);font-size:.72rem;">❌ '+esc(e?.message||e?.code||String(e))+'</td></tr>';
+  }
 }
 
 function _renderLeadsRows(tbody,data,count,from,to){
@@ -3239,12 +3257,12 @@ async function sendToWebhook(i){
   const el=$id('syncStatus');
   if(el)el.textContent='📤 Enviando...';
   try{
-    const payload=JSON.stringify({leads:contacts.map(c=>({
-      nome:cleanNome(c.nome),telefone:c.phone,estado:c.estado,
+    const payload=JSON.stringify({contacts:contacts.map(c=>({
+      nome:cleanNome(c.nome),phone:c.phone,estado:c.estado,
       status:c.status,service:c.service,notes:c.notes,
       lastContact:c.lastContact,nextContact:c.nextContact
     }))});
-    const r=await fetch(w.url,{method:'POST',headers:{'Content-Type':'application/json'},body:payload,mode:'no-cors'});
+    await fetch(w.url,{method:'POST',headers:{'Content-Type':'application/json'},body:payload,mode:'no-cors'});
     if(el)el.textContent='✅ Enviado para "'+w.name+'" em '+new Date().toLocaleTimeString('pt-BR');
     toast('✅ Dados enviados para "'+w.name+'"!');
   }catch(e){
@@ -3267,8 +3285,8 @@ async function sendToWebhookUrl(url){
   const el=$id('syncStatus');
   if(el)el.textContent='📤 Enviando...';
   try{
-    const payload=JSON.stringify({leads:contacts.map(c=>({
-      nome:cleanNome(c.nome),telefone:c.phone,estado:c.estado,
+    const payload=JSON.stringify({contacts:contacts.map(c=>({
+      nome:cleanNome(c.nome),phone:c.phone,estado:c.estado,
       status:c.status,service:c.service,notes:c.notes,
       lastContact:c.lastContact,nextContact:c.nextContact
     }))});
@@ -3370,7 +3388,33 @@ function exportCSV(){
   contacts.forEach(c=>{const camp=campaigns.find(cp=>cp.id===c.campaign);rows.push([c.nome,c.phone,c.estado||'?',c.status,camp?camp.name:'—',c.lastContact||'',c.nextContact||'',c.fuLevel,c.sentAt||'',c.notes||'']);});
   const csv=rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
   const b=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='advshot-crm.csv';a.click();
+}// ═══ FUNÇÕES DE MODAL / SHEETS ════════════════════════════
+function openSheetsModal(){$id('sheetsModal')?.classList.add('open');}
+function closeSheetsModal(){$id('sheetsModal')?.classList.remove('open');}
+function closeSyncConfirm(){$id('syncConfirmModal')?.classList.remove('open');}
+function executeSyncSheets(){closeSyncConfirm();confirmSync();}
+
+function downloadUpdatedXlsx(){
+  if(!importWB||typeof XLSX==='undefined'){toast('⚠️ Nenhuma planilha carregada.');return;}
+  const data=XLSX.write(importWB,{bookType:'xlsx',type:'array'});
+  const blob=new Blob([data],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='leads-atualizados.xlsx';
+  a.click();
+  URL.revokeObjectURL(a.href);
 }
-</script>
+
+function markLeadSentInSupabase(id){
+  if(!sbClient||!id)return;
+  const sentAt=new Date().toLocaleString('pt-BR');
+  sbClient.from('contacts').update({
+    done:true,col_e:'ENVIADO',col_f:sentAt,
+    sent_at:sentAt,last_contact:today()
+  }).eq('id',id)
+  .then(({error})=>{if(error)console.warn('markLeadSentInSupabase:',error.message);})
+  .catch(e=>console.warn('markLeadSentInSupabase:',e));
+}
+
 </body>
 </html>
