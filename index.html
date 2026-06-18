@@ -565,8 +565,7 @@ body,input,select,textarea,.card,.modal,.ci,.crm-card,.stat-box,.fu-card,.tpl-ca
         <button class="btn btn-ghost btn-full" id="btnSkip" onclick="skipContact()" style="margin-top:6px;font-size:.82rem;letter-spacing:.03em;">⏭ Não / Pular — continuar para o próximo</button>
       </div>
       <div class="info-box">⚠️ O WhatsApp abre com a mensagem preenchida — é só clicar Enviar!</div>
-      <button class="btn btn-ghost" style="width:100%;font-size:.78rem;margin-bottom:4px;" id="btnHideSent" onclick="toggleHideSent()">👁 Mostrar enviados</button>
-      <button class="btn btn-ghost" style="width:100%;font-size:.78rem;margin-bottom:8px;" id="btnSuspectOnly" onclick="toggleSuspectOnly()">🔴 Irregulares</button>
+      <button class="btn btn-ghost" style="width:100%;font-size:.78rem;margin-bottom:8px;" id="btnHideSent" onclick="toggleHideSent()">👁 Mostrar enviados</button>
       <div id="contactList"></div>
     </div>
   </div>
@@ -1554,20 +1553,20 @@ function setMode(m){
 function isSuspectName(nome){
   if(!nome||nome.trim().length<2)return true;
   const n=nome.trim();
-  // Sem nenhuma letra latina
-  if(!/[a-zA-Z\u00C0-\u00FF]/.test(n))return true;
-  // Encoding quebrado: chars típicos de UTF-8 mal decodificado por código
-  const codes=[...n].map(ch=>ch.charCodeAt(0));
-  const hasGarbled=codes.some(c=>(c>=0xC0&&c<=0xC6)||(c>=0xC8&&c<=0xCF)||(c>=0xD0&&c<=0xD6));
-  if(hasGarbled&&n.includes('\xC3'))return true;
-  // Proporção baixa de letras (muitos emojis/símbolos)
-  const letras=(n.match(/[a-zA-Z\u00C0-\u00FF]/g)||[]).length;
+  // Encoding quebrado: sequências típicas de UTF-8 mal decodificado
+  if(/[ÃðÂ£¢¡â€œÅ½Å ]+/.test(n))return true;
+  // Só emojis ou símbolos (sem letra do alfabeto latino/acentuado)
+  if(!/[a-zA-ZÀ-ú]/.test(n))return true;
+  // Proporção alta de emojis/símbolos em relação a letras
+  const letras=(n.match(/[a-zA-ZÀ-ú]/g)||[]).length;
   const total=n.replace(/\s/g,'').length;
-  if(total>4&&letras/total<0.35)return true;
-  // Nomes genéricos conhecidos
-  const bl=['n\u00e3o dispon\u00edvel','nao disponivel','indispon\u00edvel',
-    'sem nome','desconhecido','n/a','null','undefined','n\u00e3o informado'];
-  return bl.includes(n.toLowerCase());
+  if(total>3&&letras/total<0.4)return true;
+  // Nomes conhecidos que não são pessoas
+  const blacklist=['não disponível','nao disponivel','indisponível','indisponivel',
+    'número errado','numero errado','sem nome','desconhecido','cliente','usuário',
+    'não informado','nao informado','n/a','null','undefined'];
+  if(blacklist.includes(n.toLowerCase()))return true;
+  return false;
 }
 function getMsg(nome,idx){
   const i=(idx===undefined||idx===null||isNaN(idx))?0:Math.abs(Math.round(idx));
@@ -2005,14 +2004,6 @@ function syncAutoButtons(){
 // drawCD é a função que atualiza o display (definida acima em scheduleNext)
 
 // ═══ RENDER DISPARADOR ════════════════════════════════════
-let suspectOnly=false;
-function toggleSuspectOnly(){
-  suspectOnly=!suspectOnly;
-  const btn=$id('btnSuspectOnly');
-  if(btn)btn.textContent=suspectOnly?'🔴 Mostrar todos':'🔴 Mostrar somente irregulares';
-  renderDisp();
-}
-
 function renderDisp(){
   const done=contacts.filter(c=>c.done).length;
   setTxt('tot',contacts.length);setTxt('sent',done);setTxt('left',contacts.length-done);
@@ -2022,7 +2013,6 @@ function renderDisp(){
   list.innerHTML=contacts.map((c,i)=>{
     if(hideSent&&c.done)return'';
     const suspect=isSuspectName(c.nome);
-    if(suspectOnly&&!suspect)return'';
     return'<div class="ci '+(c.done?'done ':'')+( i===ni?'active-item':'')+'"'+(suspect?' style="background:rgba(239,68,68,0.08);border-left:3px solid #ef4444;"':'')+'>'
       +'<span class="idx">'+(i+1)+'</span>'
       +'<div class="ci-info">'
