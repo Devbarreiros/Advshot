@@ -565,8 +565,10 @@ body,input,select,textarea,.card,.modal,.ci,.crm-card,.stat-box,.fu-card,.tpl-ca
         <button class="btn btn-ghost btn-full" id="btnSkip" onclick="skipContact()" style="margin-top:6px;font-size:.82rem;letter-spacing:.03em;">⏭ Não / Pular — continuar para o próximo</button>
       </div>
       <div class="info-box">⚠️ O WhatsApp abre com a mensagem preenchida — é só clicar Enviar!</div>
-      <button class="btn btn-ghost" style="width:100%;font-size:.78rem;margin-bottom:8px;" id="btnHideSent" onclick="toggleHideSent()">👁 Mostrar enviados</button>
-      <button class="btn btn-ghost" style="width:100%;font-size:.78rem;margin-bottom:8px;" id="btnSuspectOnly" onclick="toggleSuspectOnly()">🔴 Mostrar somente irregulares</button>
+      <div style="display:flex;gap:6px;margin-bottom:8px;">
+        <button class="btn btn-ghost" style="flex:1;font-size:.78rem;" id="btnHideSent" onclick="toggleHideSent()">👁 Mostrar enviados</button>
+        <button class="btn btn-ghost" style="flex:1;font-size:.78rem;" id="btnSuspectOnly" onclick="toggleSuspectOnly()">🔴 Irregulares</button>
+      </div>
       <div id="contactList"></div>
     </div>
   </div>
