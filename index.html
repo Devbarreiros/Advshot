@@ -566,10 +566,6 @@ body,input,select,textarea,.card,.modal,.ci,.crm-card,.stat-box,.fu-card,.tpl-ca
       </div>
       <div class="info-box">⚠️ O WhatsApp abre com a mensagem preenchida — é só clicar Enviar!</div>
       <button class="btn btn-ghost" style="width:100%;font-size:.78rem;margin-bottom:8px;" id="btnHideSent" onclick="toggleHideSent()">👁 Mostrar enviados</button>
-      <div style="display:flex;gap:6px;margin-bottom:8px;">
-        <button id="btnSuspectFilter" class="btn btn-ghost" style="flex:1;font-size:.76rem;" onclick="toggleSuspectFilter()">🔴 Ver suspeitos</button>
-        <span id="suspectCount" style="font-size:.72rem;color:#ef4444;align-self:center;"></span>
-      </div>
       <div id="contactList"></div>
     </div>
   </div>
@@ -2008,33 +2004,16 @@ function syncAutoButtons(){
 // drawCD é a função que atualiza o display (definida acima em scheduleNext)
 
 // ═══ RENDER DISPARADOR ════════════════════════════════════
-let showSuspectOnly=false;
-
-function toggleSuspectFilter(){
-  showSuspectOnly=!showSuspectOnly;
-  const btn=$id('btnSuspectFilter');
-  if(btn){
-    btn.style.background=showSuspectOnly?'#7f1d1d':'';
-    btn.style.color=showSuspectOnly?'#fca5a5':'';
-    btn.textContent=showSuspectOnly?'🔴 Suspeitos (ativo)':'🔴 Ver suspeitos';
-  }
-  renderDisp();
-}
-
 function renderDisp(){
   const done=contacts.filter(c=>c.done).length;
   setTxt('tot',contacts.length);setTxt('sent',done);setTxt('left',contacts.length-done);
   const pf=$id('pFill');if(pf)pf.style.width=(contacts.length?done/contacts.length*100:0)+'%';
   const ni=isAuto?nextP():-1;
   const list=$id('contactList');if(!list)return;
-  // Contagem de suspeitos
-  const suspCount=contacts.filter(c=>!c.done&&isSuspectName(c.nome)).length;
-  const sc=$id('suspectCount');
-  if(sc)sc.textContent=suspCount>0?suspCount+' suspeitos':'';
   list.innerHTML=contacts.map((c,i)=>{
     if(hideSent&&c.done)return'';
-    if(showSuspectOnly&&!isSuspectName(c.nome))return'';
-    return'<div class="ci '+(c.done?'done ':'')+( i===ni?'active-item':'')+'">'
+    const suspect=isSuspectName(c.nome);
+    return'<div class="ci '+(c.done?'done ':'')+( i===ni?'active-item':'')+'"'+(suspect?' style="background:rgba(239,68,68,0.08);border-left:3px solid #ef4444;"':'')+'>'
       +'<span class="idx">'+(i+1)+'</span>'
       +'<div class="ci-info">'
         +'<div class="ci-name '+(c.done?'s':'')+'">'+(isSuspectName(c.nome)?'<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ef4444;margin-right:4px;vertical-align:middle;" title="Nome suspeito"></span>':'')+esc(c.nome)+' <span class="estado-badge">'+(c.estado||'?')+'</span>'+(i===ni?'<span style="font-size:.62rem;background:var(--taupe);color:#fff;padding:1px 5px;border-radius:99px;margin-left:4px;">próximo</span>':'')+'</div>'
