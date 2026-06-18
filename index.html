@@ -565,7 +565,8 @@ body,input,select,textarea,.card,.modal,.ci,.crm-card,.stat-box,.fu-card,.tpl-ca
         <button class="btn btn-ghost btn-full" id="btnSkip" onclick="skipContact()" style="margin-top:6px;font-size:.82rem;letter-spacing:.03em;">⏭ Não / Pular — continuar para o próximo</button>
       </div>
       <div class="info-box">⚠️ O WhatsApp abre com a mensagem preenchida — é só clicar Enviar!</div>
-      <button class="btn btn-ghost" style="width:100%;font-size:.78rem;margin-bottom:8px;" id="btnHideSent" onclick="toggleHideSent()">👁 Mostrar enviados</button>
+      <button class="btn btn-ghost" style="width:100%;font-size:.78rem;margin-bottom:4px;" id="btnHideSent" onclick="toggleHideSent()">👁 Mostrar enviados</button>
+      <button class="btn btn-ghost" style="width:100%;font-size:.78rem;margin-bottom:8px;" id="btnSuspectOnly" onclick="toggleSuspectOnly()">🔴 Irregulares</button>
       <div id="contactList"></div>
     </div>
   </div>
@@ -1495,6 +1496,13 @@ function handleSessionLimitChange(){
 let cdDeadline=0;
 let batchMode=false, selectedLeads=new Set();
 let hideSent=true;
+let suspectOnly=false;
+function toggleSuspectOnly(){
+  suspectOnly=!suspectOnly;
+  const btn=$id('btnSuspectOnly');
+  if(btn)btn.textContent=suspectOnly?'🔴 Mostrar todos':'🔴 Irregulares';
+  renderDisp();
+}
 
 // ═══ INIT ═════════════════════════════════════════════════
 (function init(){
@@ -2013,6 +2021,7 @@ function renderDisp(){
   list.innerHTML=contacts.map((c,i)=>{
     if(hideSent&&c.done)return'';
     const suspect=isSuspectName(c.nome);
+    if(suspectOnly&&!suspect)return'';
     return'<div class="ci '+(c.done?'done ':'')+( i===ni?'active-item':'')+'"'+(suspect?' style="background:rgba(239,68,68,0.08);border-left:3px solid #ef4444;"':'')+'>'
       +'<span class="idx">'+(i+1)+'</span>'
       +'<div class="ci-info">'
