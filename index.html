@@ -701,13 +701,10 @@ body,input,select,textarea,.card,.modal,.ci,.crm-card,.stat-box,.fu-card,.tpl-ca
   <!-- BACKUP / RESTAURAR -->
   <div class="card">
     <div class="card-title">💾 Backup & Restaurar</div>
-    <p style="font-size:.78rem;color:var(--taupe);margin-bottom:12px;line-height:1.5;">Salve todos os seus dados (contatos, configurações, funil, mensagens) num arquivo JSON. Importe de qualquer computador para restaurar tudo.</p>
+    <p style="font-size:.78rem;color:var(--taupe);margin-bottom:12px;line-height:1.5;">Seus dados ficam salvos no Supabase — acesse de qualquer computador. Backup automático todo dia.</p>
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
-      <button class="btn btn-green" style="flex:1;" onclick="exportBackup()">⬇️ Baixar backup</button>
-      <label class="btn btn-dark" style="flex:1;cursor:pointer;text-align:center;">
-        ⬆️ Importar backup
-        <input type="file" accept=".json" onchange="importBackup(event)" style="display:none;">
-      </label>
+      <button class="btn btn-green" style="flex:1;" onclick="exportBackup()">☁️ Salvar no Supabase</button>
+      <button class="btn btn-dark" style="flex:1;" onclick="importBackup()">⬆️ Restaurar do Supabase</button>
     </div>
     <div id="backupStatus" style="font-size:.74rem;color:var(--taupe);margin-top:8px;"></div>
   </div>
@@ -1499,6 +1496,8 @@ let hideSent=true;
   // Depois tenta Supabase em background
   loadFromSupabase().then(ok=>{
     if(ok){renderAll();renderCRM();renderDash();}
+    // Backup automático diário após Supabase conectar
+    setTimeout(autoBackupIfNeeded, 5000);
   });
 })();
 
@@ -3534,52 +3533,69 @@ function getNextAction(lead){
   return'Monitorar ou tentar nova abordagem.';
 }
 
-// ═══ BACKUP & RESTAURAR ════════════════════════════════════
-function exportBackup(){
-  const KEYS=['advshot2','advshot_vars','advshot_mode','advshot_selvar',
-    'advshot_camps','advshot_webhooks','advshot_daily','advshot_sendlog',
-    'advshot_banstate','kb_cols','lv_estados','state_msgs','agenda_items',
-    'advshot_fumsgs','advshot_schema'];
-  const backup={_version:2,_date:new Date().toISOString(),_app:'ADV Shot'};
-  // Exporta todas as chaves conhecidas + qualquer chave advshot_*
-  [...KEYS,...Object.keys(localStorage).filter(k=>k.startsWith('advshot')||k.startsWith('daily_'))].forEach(k=>{
+// ═══ BACKUP & RESTAURAR (Supabase) ═════════════════════════
+const BACKUP_KEYS=['advshot2','advshot_vars','advshot_mode','advshot_selvar',
+  'advshot_camps','advshot_webhooks','kb_cols','lv_estados','state_msgs',
+  'agenda_items','advshot_fumsgs'];
+
+async function saveBackupToSupabase(){
+  if(!sbClient)return false;
+  const backup={};
+  [...BACKUP_KEYS,...Object.keys(localStorage).filter(k=>k.startsWith('daily_')||k.startsWith('advshot'))].forEach(k=>{
     try{const v=localStorage.getItem(k);if(v!=null)backup[k]=v;}catch(e){}
   });
-  const json=JSON.stringify(backup,null,2);
-  const blob=new Blob([json],{type:'application/json'});
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);
-  a.download='advshot-backup-'+today()+'.json';
-  a.click();
-  URL.revokeObjectURL(a.href);
-  toast('✅ Backup baixado! Salve em nuvem (Drive, Dropbox) para acessar de qualquer lugar.',5000);
-  setTxt('backupStatus','Último backup: '+new Date().toLocaleString('pt-BR'));
+  const payload={id:'main_backup',data:JSON.stringify(backup),updated_at:new Date().toISOString()};
+  const{error}=await sbClient.from('settings').upsert(payload,{onConflict:'id'});
+  return!error;
 }
 
-function importBackup(event){
-  const file=event.target.files?.[0];
-  if(!file)return;
-  const reader=new FileReader();
-  reader.onload=e=>{
-    try{
-      const data=JSON.parse(e.target.result);
-      if(data._app!=='ADV Shot')throw new Error('Arquivo inválido — não é um backup do ADV Shot.');
-      if(!confirm('Isso vai substituir TODOS os dados atuais pelo backup de '+new Date(data._date).toLocaleString('pt-BR')+'. Confirmar?'))return;
-      let count=0;
-      Object.entries(data).forEach(([k,v])=>{
-        if(k.startsWith('_'))return; // pula metadados
-        try{localStorage.setItem(k,v);count++;}catch(e){}
-      });
-      setTxt('backupStatus','✅ '+count+' chaves restauradas de '+new Date(data._date).toLocaleString('pt-BR'));
-      toast('✅ Backup restaurado! Recarregando...',2000);
-      setTimeout(()=>location.reload(),2000);
-    }catch(err){
-      toast('❌ Erro ao importar: '+err.message,5000);
-      setTxt('backupStatus','❌ Falha: '+err.message);
-    }
-  };
-  reader.readAsText(file);
-  event.target.value=''; // limpa input para permitir reimportar mesmo arquivo
+async function loadBackupFromSupabase(){
+  if(!sbClient)return null;
+  const{data,error}=await sbClient.from('settings').select('data,updated_at').eq('id','main_backup').single();
+  if(error||!data)return null;
+  return{payload:JSON.parse(data.data),date:data.updated_at};
+}
+
+async function exportBackup(){
+  const btn=event?.target;
+  if(btn){btn.disabled=true;btn.textContent='⏳ Salvando...';}
+  const ok=await saveBackupToSupabase();
+  if(btn){btn.disabled=false;btn.textContent='☁️ Salvar no Supabase';}
+  if(ok){
+    toast('✅ Backup salvo no Supabase! Acesse de qualquer computador.',4000);
+    setTxt('backupStatus','Último backup: '+new Date().toLocaleString('pt-BR'));
+  }else{
+    toast('❌ Erro ao salvar. Verifique conexão.',3000);
+  }
+}
+
+async function importBackup(){
+  const btn=event?.target;
+  if(btn){btn.disabled=true;btn.textContent='⏳ Buscando...';}
+  const result=await loadBackupFromSupabase();
+  if(btn){btn.disabled=false;btn.textContent='⬆️ Restaurar do Supabase';}
+  if(!result){toast('❌ Nenhum backup encontrado no Supabase.',3000);return;}
+  const date=new Date(result.date).toLocaleString('pt-BR');
+  if(!confirm('Restaurar backup de '+date+'?\n\nIsso vai substituir os dados locais atuais.'))return;
+  let count=0;
+  Object.entries(result.payload).forEach(([k,v])=>{
+    try{localStorage.setItem(k,v);count++;}catch(e){}
+  });
+  setTxt('backupStatus','✅ Restaurado: '+date);
+  toast('✅ Backup de '+date+' restaurado! Recarregando...',2000);
+  setTimeout(()=>location.reload(),2000);
+}
+
+// Backup automático diário
+async function autoBackupIfNeeded(){
+  const lastKey='advshot_last_backup';
+  const last=localStorage.getItem(lastKey)||'';
+  if(last===today())return; // já fez backup hoje
+  const ok=await saveBackupToSupabase();
+  if(ok){
+    localStorage.setItem(lastKey,today());
+    console.log('ADV Shot: backup automático realizado.');
+  }
 }
 let crmKanbanMode=false;
 
