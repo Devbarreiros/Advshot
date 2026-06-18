@@ -534,7 +534,18 @@ body,input,select,textarea,.card,.modal,.ci,.crm-card,.stat-box,.fu-card,.tpl-ca
           <label style="font-size:.76rem;color:var(--taupe);">min</label>
           <span id="iHint" style="font-size:.72rem;color:#aaa;">🎲 aleatório</span>
         </div>
-        <div class="timer-btns">
+        <div class="timer-btns" style="align-items:center;flex-wrap:wrap;gap:6px;">
+          <div style="display:flex;align-items:center;gap:5px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:4px 8px;">
+            <span style="font-size:.72rem;color:var(--taupe);">Enviar:</span>
+            <select id="sessionLimit" onchange="handleSessionLimitChange()" style="background:transparent;border:none;color:var(--black);font-size:.8rem;font-weight:600;cursor:pointer;outline:none;padding:2px 4px;">
+              <option value="0">∞ Todos</option>
+              <option value="5">5</option>
+              <option value="10" selected>10</option>
+              <option value="15">15</option>
+              <option value="20">20</option>
+              <option value="custom">Outro...</option>
+            </select>
+          </div>
           <button class="btn btn-dark" id="btnStart" onclick="startAuto()">▶ Iniciar</button>
           <button class="btn btn-orange" id="btnPause" onclick="togglePause()" style="display:none;">⏸ Pausar</button>
           <button class="btn btn-red" id="btnStop" onclick="stopAuto()" style="display:none;">⏹ Parar</button>
@@ -1441,6 +1452,25 @@ const RETOMADA_VARS=[
 let contacts=[],campaigns=[],webhooks=[],mode='random',selVar=0;
 let crmF='todos',fuF='todos',fuEstado='todos',crmSearch='',crmSortMode='default';
 let isAuto=false,isPaused=false,cdInterval=null,secsLeft=0,totalSecs=0;
+let sessionSent=0;
+
+function getSessionLimit(){
+  const sel=$id('sessionLimit');if(!sel)return 0;
+  return parseInt(sel.value)||0;
+}
+function handleSessionLimitChange(){
+  const sel=$id('sessionLimit');if(!sel)return;
+  if(sel.value==='custom'){
+    const n=parseInt(prompt('Quantos disparos nesta sessão?')||'0');
+    if(n>0){
+      const opt=document.createElement('option');
+      opt.value=String(n);opt.textContent=n+' (personalizado)';opt.selected=true;
+      sel.insertBefore(opt,sel.lastElementChild);
+    }else{
+      sel.value='10';
+    }
+  }
+}
 let cdDeadline=0;
 let batchMode=false, selectedLeads=new Set();
 let hideSent=true;
@@ -1751,11 +1781,13 @@ function getRandInt(){
 function startAuto(){
   const i=nextP();
   if(i===-1){toast('✅ Todos enviados!');return;}
-  isAuto=true;isPaused=false;
+  isAuto=true;isPaused=false;sessionSent=0;
   syncAutoButtons();
   setDisplay('cdWrap','block');
-  // Abre o primeiro e começa o contador
-  try{_doOpenChat(i);}catch(e){console.warn(e);}
+  const lim=getSessionLimit();
+  if(lim>0)setTxt('iHint','🎯 meta: '+lim+' disparos');
+  try{_doOpenChat(i);sessionSent++;}catch(e){console.warn(e);}
+  if(lim>0&&sessionSent>=lim){stopAuto();toast('🎯 Meta de '+lim+' disparos atingida!',4000);return;}
   scheduleNext();
 }
 
@@ -1763,6 +1795,8 @@ function scheduleNext(){
   clearInterval(cdInterval);
   const i=nextP();
   if(i===-1){stopAuto();toast('✅ Todos os contatos foram abertos!');return;}
+  const lim=getSessionLimit();
+  if(lim>0&&sessionSent>=lim){stopAuto();toast('🎯 Meta de '+lim+' disparos atingida!',4000);return;}
   // Auto-ajuste do intervalo pelo risco do Anti-Ban Guard
   const risk=getBanRiskLevel();
   let mn=parseInt($id('iMin')?.value)||3, mx=parseInt($id('iMax')?.value)||7;
@@ -1774,7 +1808,8 @@ function scheduleNext(){
   totalSecs=m*60;
   secsLeft=totalSecs;
   cdDeadline=Date.now()+(totalSecs*1000);
-  setTxt('iHint','🎲 próximo em '+m+' min'+(risk.level!=='low'?' (ajustado: risco '+risk.level+')':''));
+  const limInfo=lim>0?' · '+sessionSent+'/'+lim:'';
+  setTxt('iHint','🎲 '+m+' min'+(risk.level!=='low'?' · risco '+risk.level:'')+limInfo);
   hideNowArea();
   drawCD();
   cdInterval=setInterval(cdTick,500);
@@ -1789,8 +1824,9 @@ function cdTick(){
     playBell();
     const ni=nextP();
     if(ni===-1){stopAuto();toast('✅ Todos os contatos foram abertos!');return;}
-    // Abre o próximo e recomeça o contador
-    try{_doOpenChat(ni);}catch(e){console.warn(e);}
+    const lim=getSessionLimit();
+    if(lim>0&&sessionSent>=lim){stopAuto();toast('🎯 Meta de '+lim+' disparos atingida!',4000);return;}
+    try{_doOpenChat(ni);sessionSent++;}catch(e){console.warn(e);}
     scheduleNext();
   }
 }
