@@ -1302,6 +1302,17 @@ function rowToContact(r){
 
 async function loadFromSupabase(){
   if(!sbClient&&!SB_KEY)return false;
+
+  // Se acabou de restaurar backup, não sobrescreve os dados locais
+  if(localStorage.getItem('advshot_skip_sb_load')==='1'){
+    localStorage.removeItem('advshot_skip_sb_load');
+    setSyncDot('#34d399','Backup restaurado');
+    setSyncStatus('✅ Backup restaurado','Dados locais preservados');
+    // Sincroniza os dados locais para o Supabase em background
+    setTimeout(()=>syncToSupabase(true),3000);
+    return true;
+  }
+
   try{
     setSyncDot('#fbbf24','Carregando...');
     setSyncStatus('🔄 Carregando dados do Supabase...','Aguarde um momento');
@@ -3581,6 +3592,8 @@ async function importBackup(){
   Object.entries(result.payload).forEach(([k,v])=>{
     try{localStorage.setItem(k,v);count++;}catch(e){}
   });
+  // Flag para loadFromSupabase não sobrescrever os dados restaurados
+  localStorage.setItem('advshot_skip_sb_load','1');
   setTxt('backupStatus','✅ Restaurado: '+date);
   toast('✅ Backup de '+date+' restaurado! Recarregando...',2000);
   setTimeout(()=>location.reload(),2000);
