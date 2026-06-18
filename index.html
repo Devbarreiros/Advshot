@@ -566,6 +566,10 @@ body,input,select,textarea,.card,.modal,.ci,.crm-card,.stat-box,.fu-card,.tpl-ca
       </div>
       <div class="info-box">⚠️ O WhatsApp abre com a mensagem preenchida — é só clicar Enviar!</div>
       <button class="btn btn-ghost" style="width:100%;font-size:.78rem;margin-bottom:8px;" id="btnHideSent" onclick="toggleHideSent()">👁 Mostrar enviados</button>
+      <div style="display:flex;gap:6px;margin-bottom:8px;">
+        <button id="btnSuspectFilter" class="btn btn-ghost" style="flex:1;font-size:.76rem;" onclick="toggleSuspectFilter()">🔴 Ver suspeitos</button>
+        <span id="suspectCount" style="font-size:.72rem;color:#ef4444;align-self:center;"></span>
+      </div>
       <div id="contactList"></div>
     </div>
   </div>
@@ -1550,6 +1554,24 @@ function setMode(m){
   const ml=$id('manualList');if(ml)ml.style.display=m==='manual'?'flex':'none';
   const ri=$id('randInfo');if(ri)ri.style.display=m==='random'?'block':'none';
 }
+function isSuspectName(nome){
+  if(!nome||nome.trim().length<2)return true;
+  const n=nome.trim();
+  // Encoding quebrado: sequências típicas de UTF-8 mal decodificado
+  if(/[ÃðÂ£¢¡â€œÅ½Å ]+/.test(n))return true;
+  // Só emojis ou símbolos (sem letra do alfabeto latino/acentuado)
+  if(!/[a-zA-ZÀ-ú]/.test(n))return true;
+  // Proporção alta de emojis/símbolos em relação a letras
+  const letras=(n.match(/[a-zA-ZÀ-ú]/g)||[]).length;
+  const total=n.replace(/\s/g,'').length;
+  if(total>3&&letras/total<0.4)return true;
+  // Nomes conhecidos que não são pessoas
+  const blacklist=['não disponível','nao disponivel','indisponível','indisponivel',
+    'número errado','numero errado','sem nome','desconhecido','cliente','usuário',
+    'não informado','nao informado','n/a','null','undefined'];
+  if(blacklist.includes(n.toLowerCase()))return true;
+  return false;
+}
 function getMsg(nome,idx){
   const i=(idx===undefined||idx===null||isNaN(idx))?0:Math.abs(Math.round(idx));
   const tpl=mode==='random'?VARS[i%VARS.length]:VARS[selVar||0];
@@ -1997,7 +2019,7 @@ function renderDisp(){
     return'<div class="ci '+(c.done?'done ':'')+( i===ni?'active-item':'')+'">'
       +'<span class="idx">'+(i+1)+'</span>'
       +'<div class="ci-info">'
-        +'<div class="ci-name '+(c.done?'s':'')+'">'+esc(c.nome)+' <span class="estado-badge">'+(c.estado||'?')+'</span>'+(i===ni?'<span style="font-size:.62rem;background:var(--taupe);color:#fff;padding:1px 5px;border-radius:99px;margin-left:4px;">próximo</span>':'')+'</div>'
+        +'<div class="ci-name '+(c.done?'s':'')+'">'+(isSuspectName(c.nome)?'<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ef4444;margin-right:4px;vertical-align:middle;" title="Nome suspeito"></span>':'')+esc(c.nome)+' <span class="estado-badge">'+(c.estado||'?')+'</span>'+(i===ni?'<span style="font-size:.62rem;background:var(--taupe);color:#fff;padding:1px 5px;border-radius:99px;margin-left:4px;">próximo</span>':'')+'</div>'
         +'<div class="ci-sub">💬 '+esc(getMsg(c.nome,c.varIdx))+'</div>'
       +'</div>'
       +'<button class="btn-open" '
@@ -3552,9 +3574,14 @@ const BACKUP_KEYS=['advshot2','advshot_vars','advshot_mode','advshot_selvar',
 async function saveBackupToSupabase(){
   if(!sbClient)return false;
   const backup={};
+  // Salva configurações do localStorage
   [...BACKUP_KEYS,...Object.keys(localStorage).filter(k=>k.startsWith('daily_')||k.startsWith('advshot'))].forEach(k=>{
     try{const v=localStorage.getItem(k);if(v!=null)backup[k]=v;}catch(e){}
   });
+  // Salva contatos do array em memória (podem vir do Supabase, não só localStorage)
+  if(contacts&&contacts.length>0){
+    backup['advshot2']=JSON.stringify({contacts,campaigns,webhooks:[],hideSent,varIdx:selVar,mode});
+  }
   const payload={id:'main_backup',data:JSON.stringify(backup),updated_at:new Date().toISOString()};
   const{error}=await sbClient.from('settings').upsert(payload,{onConflict:'id'});
   return!error;
