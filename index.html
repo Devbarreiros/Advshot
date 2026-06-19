@@ -651,12 +651,16 @@ body,input,select,textarea,.card,.modal,.ci,.crm-card,.stat-box,.fu-card,.tpl-ca
     </div>
   </div>
   <div class="sub-page" id="sub-funil">
-    <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-        <div class="card-title" style="margin:0;">📊 Funil — etapas do WhatsApp</div>
-        <button class="btn btn-ghost" style="font-size:.74rem;" onclick="refreshFunil()">🔄 Atualizar</button>
+    <div class="card" style="overflow-x:hidden;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+        <div class="card-title" style="margin:0;">📊 Funil WhatsApp</div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span id="funilLastSync" style="font-size:.68rem;color:#aaa;"></span>
+          <button class="btn btn-ghost" style="font-size:.72rem;padding:4px 10px;" onclick="refreshFunil()">🔄</button>
+        </div>
       </div>
-      <div id="funilBoard"></div>
+      <div style="font-size:.72rem;color:#aaa;margin-bottom:12px;">Atualiza automaticamente a cada 30s · clique em ↔ Mover para trocar de etapa</div>
+      <div id="funilBoard" style="margin:0 -16px;padding:0 16px;"></div>
     </div>
   </div>
   <div class="sub-page" id="sub-fu">
@@ -665,9 +669,9 @@ body,input,select,textarea,.card,.modal,.ci,.crm-card,.stat-box,.fu-card,.tpl-ca
       <p style="font-size:.8rem;color:var(--taupe);margin-bottom:10px;line-height:1.5;">Mensagens personalizadas por IA baseadas no histórico de cada lead.</p>
       <div class="filter-row" id="fuLvlFilter">
         <button class="fb active" onclick="setFuF('todos',event)">Todos</button>
-        <button class="fb" onclick="setFuF('1',event)">Nível 1</button>
-        <button class="fb" onclick="setFuF('2',event)">Nível 2</button>
-        <button class="fb" onclick="setFuF('3',event)">Nível 3</button>
+        <button class="fb" onclick="setFuF('1',event)" title="HT, Rcv, Respondeu">🟢 Início</button>
+        <button class="fb" onclick="setFuF('2',event)" title="Dados, Análise, Lead qualificado">🟣 Meio</button>
+        <button class="fb" onclick="setFuF('3',event)" title="Proposta, Cliente">🔵 Proposta</button>
       </div>
       <div class="filter-row" id="fuEstadoFilter" style="margin-top:-4px;padding-top:6px;border-top:1px dashed var(--gray);"></div>
       <div id="fuList"></div>
@@ -1480,6 +1484,16 @@ function getHeat(c){
 
 // ═══ MENSAGENS POR ETIQUETA ════════════════════════════════
 const FU_BY_LABEL={
+  'ht':[
+    '{SAUDACAO}, {NOME}! Vi que você tem interesse — posso te ligar para conversarmos melhor?',
+    'Oi {NOME}! Gostaria de entender melhor o seu caso — tem um momento esta semana?',
+    '{SAUDACAO}, {NOME}. Você é exatamente o perfil que atendemos. Quando podemos conversar?'
+  ],
+  'rcv':[
+    '{SAUDACAO}, {NOME}! Recebi seu contato — quando posso te retornar?',
+    'Oi {NOME}! Vi que você entrou em contato. Pode me contar um pouco mais sobre o seu caso?',
+    '{SAUDACAO}, {NOME}. Retornando o seu contato — ainda posso te ajudar?'
+  ],
   '00':[
     '{SAUDACAO}, {NOME}! Tentei te contatar há alguns dias — tudo bem por aí?',
     'Oi {NOME}! Passei para ver se houve algo que impediu de continuar nossa conversa.',
@@ -1501,9 +1515,9 @@ const FU_BY_LABEL={
     '{SAUDACAO}, {NOME}. Tenho novidades sobre o seu caso — quando podemos conversar?'
   ],
   '04':[
-    '{SAUDACAO}, {NOME}! Terminei de analisar o seu caso — quando temos um horário para conversar?',
-    'Oi {NOME}! A análise está pronta. Podemos agendar esta semana?',
-    '{SAUDACAO}, {NOME}. Tenho novidades sobre o seu caso — quando podemos conversar?'
+    '{SAUDACAO}, {NOME}! Analisei e seu caso tem viabilidade. Podemos conversar sobre os próximos passos?',
+    'Oi {NOME}! Tenho boas notícias sobre o seu caso — quando posso te chamar?',
+    '{SAUDACAO}, {NOME}. Seu perfil se encaixa bem no que trabalhamos. Vamos agendar uma conversa?'
   ],
   '05':[
     '{SAUDACAO}, {NOME}! Te enviei uma proposta e não tive retorno — conseguiu visualizar?',
@@ -1530,17 +1544,26 @@ function getMsgByLabel(c,idx){
   return applyVars(FU[lv][Math.max(0,c.fuMsgIdx[lv])],cleanNome(c.nome));
 }
 function getLabelNum(c){
-  const m=(c.wa_label||'').match(/^(\d{2})/);return m?m[1]:null;
+  const lbl=c.wa_label||'';
+  // Labels com prefixo numérico (ex: "01- respondeu")
+  const m=lbl.match(/^(\d{2})/);if(m)return m[1];
+  // Labels sem número — retorna o texto limpo em minúsculo
+  const clean=lbl.trim().toLowerCase();
+  if(clean==='ht')return'ht';
+  if(clean==='rcv')return'rcv';
+  return null;
 }
 const LABEL_MAP={
-  '00':{name:'Não respondeu', color:'#6b7280'},
-  '01':{name:'Respondeu',     color:'#22c55e'},
-  '02':{name:'Dados',         color:'#f97316'},
-  '03':{name:'Análise',       color:'#a855f7'},
-  '04':{name:'Análise',       color:'#a855f7'},
-  '05':{name:'Proposta',      color:'#3b82f6'},
-  '06':{name:'Descarte',      color:'#ef4444'},
-  '07':{name:'Cliente',       color:'#eab308'},
+  'ht' :{name:'HT',              color:'#ec4899'},
+  'rcv':{name:'Rcv',             color:'#f59e0b'},
+  '00' :{name:'Não respondeu',   color:'#6b7280'},
+  '01' :{name:'Respondeu',       color:'#22c55e'},
+  '02' :{name:'Dados',           color:'#f97316'},
+  '03' :{name:'Análise',         color:'#a855f7'},
+  '04' :{name:'Lead qualificado',color:'#6366f1'},
+  '05' :{name:'Proposta',        color:'#3b82f6'},
+  '06' :{name:'Descarte',        color:'#ef4444'},
+  '07' :{name:'Cliente',         color:'#eab308'},
 };
 function getLabelName(c){
   if(!c.wa_label)return null;
@@ -1648,7 +1671,7 @@ function goSub(s){
   const sp=$id('sub-'+s);if(sp)sp.classList.add('active');
   const tabs=['cont','funil','fu'];
   const tab=document.querySelectorAll('.sub-tab')[tabs.indexOf(s)];if(tab)tab.classList.add('active');
-  if(s==='funil')renderFunilBoard();
+  if(s==='funil'){startFunilAutoRefresh();}else{stopFunilAutoRefresh();}
   if(s==='fu')renderFU();else if(s==='cont')renderCRM();
 }
 
@@ -2279,54 +2302,69 @@ async function aiSuggest(i){
   }catch(e){box.innerHTML='<strong>✨ IA:</strong> Erro.';}
 }
 function renderFU(){
-  const elig=contacts.filter(c=>c.done&&!['nao_quer','errado','fechado','sem_viabilidade','descartado'].includes(c.status)&&c.status!=='nao_respondeu_sem_label');
-  renderFuEstadoFilter(elig);
-
-  let list=elig;
-  // Filtro por nível
-  if(fuF!=='todos')list=list.filter(c=>String(c.fuLevel===0?1:Math.min(c.fuLevel+1,3))===fuF);
-  if(fuEstado!=='todos')list=list.filter(c=>(c.estado||'?')===fuEstado);
-
-  // Ordena: com wa_label primeiro, depois por calor (dias recentes primeiro)
-  list=[...list].sort((a,b)=>{
-    const aHasLabel=a.wa_label?0:1, bHasLabel=b.wa_label?0:1;
-    if(aHasLabel!==bHasLabel)return aHasLabel-bHasLabel;
-    return getDaysSince(a.lastContact)-getDaysSince(b.lastContact);
+  // Pega contatos com wa_label definida (vieram do funil WhatsApp)
+  // Exclui Descarte e Não respondeu (sem ação necessária no FU)
+  const elig=contacts.filter(c=>{
+    if(!c.wa_label)return false;
+    const num=getLabelNum(c);
+    if(num==='06')return false; // Descarte — não recontatar
+    return true;
   });
 
+  // Filtro por estado
+  renderFuEstadoFilter(elig);
+  let list=elig;
+  if(fuF!=='todos'){
+    // Mapeia filtros de nível para etiquetas
+    const levelMap={'1':['00','ht','rcv','01'],'2':['02','03','04'],'3':['05','07']};
+    const allowed=levelMap[fuF]||[];
+    list=list.filter(c=>allowed.includes(getLabelNum(c)||''));
+  }
+  if(fuEstado!=='todos')list=list.filter(c=>(c.estado||'?')===fuEstado);
+
+  // Ordena: mais quentes (menos dias) primeiro
+  list=[...list].sort((a,b)=>getDaysSince(a.lastContact)-getDaysSince(b.lastContact));
+
   const el=$id('fuList');if(!el)return;
-  if(!list.length){el.innerHTML='<div class="empty">Nenhum lead disponível.<br><small>Aparecem após o primeiro disparo.</small></div>';return;}
-  const LVLS={1:'Nível 1',2:'Nível 2',3:'Nível 3'};
-  const LCS={1:'l1',2:'l2',3:'l3'};
+  if(!list.length){
+    el.innerHTML='<div class="empty">Nenhum lead para recontato.<br><small>Aparecem aqui quando a extensão sincronizar as etiquetas do WhatsApp.</small></div>';
+    return;
+  }
+
   el.innerHTML=list.map(c=>{
     const i=contacts.indexOf(c);
     const lv=c.fuLevel===0?1:Math.min(c.fuLevel+1,3);
+    if(!c.fuMsgIdx)c.fuMsgIdx={1:-1,2:-1,3:-1};
     if(c.fuMsgIdx[lv]===-1)c.fuMsgIdx[lv]=0;
     const dn=cleanNome(c.nome);
     const msg=getMsgByLabel(c,c.fuMsgIdx[lv]||0);
     const heat=getHeat(c);
-    const labelName=getLabelName(c);
+    const labelName=getLabelName(c)||c.wa_label;
     const labelColor=getLabelColor(c);
-    const labelBadge=labelName
-      ?'<span style="font-size:.65rem;background:'+labelColor+'22;color:'+labelColor+';border:1px solid '+labelColor+'44;border-radius:4px;padding:1px 6px;margin-left:5px;">'+esc(labelName)+'</span>'
-      :'';
-    const heatBadge='<span style="font-size:.68rem;color:'+heat.color+';margin-left:4px;">'+heat.icon+' '+heat.label+'</span>';
+    const num=getLabelNum(c)||'';
 
-    return'<div class="fu-card"><div class="fu-head"><div class="fu-info">'
-      +'<div class="fu-name">'+esc(dn)+' <span class="estado-badge">'+(c.estado||'?')+'</span>'+labelBadge+heatBadge+'</div>'
-      +'<div class="fu-sub">'+c.phone+(c.lastContact?' · último: '+c.lastContact:'')+'</div></div>'
-      +'<span class="lvl-badge '+LCS[lv]+'">'+LVLS[lv]+'</span></div>'
-      +'<div class="fu-body"><div class="fu-msg-lbl">Mensagem sugerida</div>'
+    // Badge da etapa
+    const etapaBadge='<span style="font-size:.65rem;background:'+labelColor+'22;color:'+labelColor+';border:1px solid '+labelColor+'44;border-radius:4px;padding:1px 6px;margin-left:5px;">'+esc(labelName)+'</span>';
+    const heatBadge='<span style="font-size:.68rem;color:'+heat.color+';margin-left:5px;">'+heat.icon+' '+heat.label+'</span>';
+
+    return'<div class="fu-card">'
+      +'<div class="fu-head">'
+      +'<div class="fu-info">'
+      +'<div class="fu-name">'+esc(dn)+etapaBadge+heatBadge+'</div>'
+      +'<div class="fu-sub">'+c.phone+(c.lastContact?' · último: '+c.lastContact:'')+'</div>'
+      +'</div>'
+      +'</div>'
+      +'<div class="fu-body">'
+      +'<div class="fu-msg-lbl">Mensagem de recontato</div>'
       +'<div class="fu-msg" id="fum-'+i+'-'+lv+'">'+esc(msg)+'</div>'
       +'<div class="ai-suggest" id="aibox-'+i+'" style="display:none;"><strong>✨ IA</strong></div>'
       +'<div class="fu-acts">'
       +'<button class="btn btn-taupe" onclick="sendFu('+i+','+lv+')">💬 Enviar</button>'
       +'<button class="btn btn-ghost" onclick="regenFuLabel('+i+','+lv+')">🔄 Variar</button>'
       +'<button class="btn btn-ai" onclick="aiGenFu('+i+','+lv+')">✨ IA</button>'
-      +'<button class="btn btn-ghost" onclick="aiSuggest('+i+')">💡 Próximo passo</button>'
       +'</div></div>'
-      +'<div class="fu-resp"><span class="resp-lbl">Resposta:</span>'
-      +'<button class="rb" onclick="setFuResp('+i+','+lv+',\'pos\')">✅ Interessado</button>'
+      +'<div class="fu-resp"><span class="resp-lbl">Após enviar:</span>'
+      +'<button class="rb" onclick="setFuResp('+i+','+lv+',\'pos\')">✅ Respondeu</button>'
       +'<button class="rb" onclick="setFuResp('+i+','+lv+',\'neu\')">🔄 Sem resposta</button>'
       +'<button class="rb" onclick="setFuResp('+i+','+lv+',\'neg\')">❌ Sem interesse</button>'
       +'</div></div>';
@@ -3798,63 +3836,131 @@ async function autoBackupIfNeeded(){
     console.log('ADV Shot: backup automático realizado.');
   }
 }
-// ═══ FUNIL POR ETIQUETA ════════════════════════════════════
-const FUNIL_ORDER=['01','02','03','04','05','07','00','06'];
+// ═══ FUNIL KANBAN ══════════════════════════════════════════
+const FUNIL_ORDER=['ht','rcv','01','02','03','04','05','07','00','06'];
+let _funilInterval=null;
+let _funilLastSync=null;
 
-function renderFunilBoard(){
-  const el=$id('funilBoard');if(!el)return;
-  const groups={};
-  FUNIL_ORDER.forEach(n=>{groups[n]=[];});
-  contacts.filter(c=>c.done).forEach(c=>{
-    const num=getLabelNum(c);
-    if(num&&groups[num])groups[num].push(c);
-  });
-  const renderCard=(c)=>{
-    const heat=getHeat(c);
-    return'<div style="background:rgba(255,255,255,.04);border-radius:7px;padding:8px 10px;margin-bottom:5px;display:flex;justify-content:space-between;align-items:center;">'
-      +'<div>'
-      +'<div style="font-size:.8rem;font-weight:600;color:var(--beige);">'+esc(cleanNome(c.nome))+'</div>'
-      +'<div style="font-size:.68rem;color:#aaa;margin-top:1px;">'+esc(c.phone)+'</div>'
-      +'</div>'
-      +'<div style="display:flex;align-items:center;gap:6px;">'
-      +'<span style="font-size:.68rem;color:'+heat.color+';">'+heat.icon+' '+heat.label+'</span>'
-      +'<button onclick="window.open(\'https://wa.me/'+c.phone+'\',\'_blank\')" style="background:none;border:none;cursor:pointer;font-size:14px;" title="Abrir WhatsApp">💬</button>'
-      +'</div></div>';
-  };
-  let html='';
-  FUNIL_ORDER.forEach(num=>{
-    const info=LABEL_MAP[num]||{name:num,color:'#aaa'};
-    const list=groups[num]||[];
-    if(!list.length)return;
-    html+='<div style="margin-bottom:14px;">'
-      +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">'
-      +'<span style="width:10px;height:10px;border-radius:50%;background:'+info.color+';display:inline-block;flex-shrink:0;"></span>'
-      +'<span style="font-size:.82rem;font-weight:700;color:'+info.color+';">'+esc(info.name)+'</span>'
-      +'<span style="font-size:.72rem;color:#666;margin-left:auto;">'+list.length+' lead'+(list.length!==1?'s':'')+'</span>'
-      +'</div>'
-      +list.map(renderCard).join('')
-      +'</div>';
-  });
-  if(!html)html='<div style="text-align:center;color:#666;padding:24px;font-size:.82rem;">Nenhum lead com etiqueta ainda.<br>Sincronize a extensão para ver o funil.</div>';
-  el.innerHTML=html;
+async function fetchFunilFromSB(){
+  if(!sbClient)return;
+  try{
+    const{data}=await sbClient.from('contacts')
+      .select('id,phone,nome,wa_label,last_contact,done')
+      .not('wa_label','is',null)
+      .limit(5000);
+    if(data){
+      // Upsert into contacts array
+      data.forEach(row=>{
+        const c=contacts.find(x=>x.id===row.id||x.phone===row.phone);
+        if(c){
+          c.wa_label=row.wa_label||c.wa_label;
+          c.lastContact=row.last_contact||c.lastContact;
+          c.done=row.done||c.done;
+        }
+      });
+      saveStorage();
+      _funilLastSync=new Date();
+      const ts=$id('funilLastSync');
+      if(ts)ts.textContent='atualizado '+_funilLastSync.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+    }
+  }catch(e){console.warn('fetchFunilFromSB:',e);}
 }
 
 async function refreshFunil(){
   const el=$id('funilBoard');
-  if(el)el.innerHTML='<div style="text-align:center;color:#aaa;padding:20px;font-size:.82rem;">🔄 Atualizando...</div>';
-  if(sbClient){
-    try{
-      const{data}=await sbClient.from('contacts').select('id,phone,nome,wa_label,last_contact,done').eq('done',true).not('wa_label','is',null).limit(2000);
-      if(data){
-        data.forEach(row=>{
-          const c=contacts.find(x=>x.id===row.id||x.phone===row.phone);
-          if(c){c.wa_label=row.wa_label||c.wa_label;c.lastContact=row.last_contact||c.lastContact;}
-        });
-        saveStorage();
-      }
-    }catch(e){console.warn('refreshFunil:',e);}
-  }
+  if(el)el.style.opacity='.5';
+  await fetchFunilFromSB();
   renderFunilBoard();
+  if(el)el.style.opacity='1';
+}
+
+function startFunilAutoRefresh(){
+  clearInterval(_funilInterval);
+  fetchFunilFromSB().then(()=>renderFunilBoard());
+  _funilInterval=setInterval(async()=>{
+    await fetchFunilFromSB();
+    renderFunilBoard();
+  },30000);
+}
+function stopFunilAutoRefresh(){
+  clearInterval(_funilInterval);
+  _funilInterval=null;
+}
+
+async function moveCardToLabel(contactIdx,newNum){
+  const c=contacts[contactIdx];if(!c)return;
+  const newLabel=Object.entries(LABEL_MAP).find(([k])=>k===newNum)?.[1];
+  if(!newLabel)return;
+  // Monta o novo wa_label com prefixo numérico ou texto puro
+  const newWaLabel=newNum.match(/^\d/)?newNum+' - '+newLabel.name:newLabel.name;
+  // Atualiza local
+  c.wa_label=newWaLabel;
+  saveStorage();
+  renderFunilBoard();
+  // Atualiza Supabase
+  if(sbClient&&c.id){
+    sbClient.from('contacts').update({wa_label:newWaLabel}).eq('id',c.id)
+      .then(()=>toast('✅ '+cleanNome(c.nome)+' → '+newLabel.name))
+      .catch(e=>toast('❌ Erro ao mover: '+e.message,'err'));
+  }else{
+    toast('✅ '+cleanNome(c.nome)+' → '+newLabel.name);
+  }
+}
+
+function renderFunilBoard(){
+  const el=$id('funilBoard');if(!el)return;
+  // Agrupa por label
+  const groups={};
+  FUNIL_ORDER.forEach(n=>{groups[n]=[];});
+  contacts.forEach((c,i)=>{
+    if(!c.wa_label)return;
+    const num=getLabelNum(c);
+    if(num&&groups[num]!==undefined)groups[num].push({c,i});
+  });
+  // Colunas só com leads
+  const activeCols=FUNIL_ORDER.filter(n=>groups[n]&&groups[n].length>0);
+  if(!activeCols.length){
+    el.innerHTML='<div style="text-align:center;padding:32px;color:#666;font-size:.82rem;">Nenhum lead com etiqueta ainda.<br>A extensão sincroniza automaticamente.</div>';
+    return;
+  }
+  const moveOpts=FUNIL_ORDER.filter(n=>LABEL_MAP[n]).map(n=>'<option value="'+n+'">'+esc(LABEL_MAP[n].name)+'</option>').join('');
+  el.innerHTML='<div style="display:flex;gap:10px;overflow-x:auto;padding-bottom:12px;min-height:200px;">'
+    +activeCols.map(num=>{
+      const info=LABEL_MAP[num]||{name:num,color:'#aaa'};
+      const list=groups[num];
+      const col=info.color;
+      return'<div style="flex:0 0 200px;min-width:200px;background:'+col+'15;border:1px solid '+col+'40;border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:0;">'
+        // Header da coluna
+        +'<div style="display:flex;align-items:center;gap:7px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid '+col+'30;">'
+        +'<span style="width:9px;height:9px;border-radius:50%;background:'+col+';flex-shrink:0;display:inline-block;"></span>'
+        +'<span style="font-size:.78rem;font-weight:700;color:'+col+';">'+esc(info.name)+'</span>'
+        +'<span style="font-size:.68rem;color:#666;margin-left:auto;background:'+col+'25;border-radius:10px;padding:1px 7px;">'+list.length+'</span>'
+        +'</div>'
+        // Cards
+        +list.map(({c,i})=>{
+          const heat=getHeat(c);
+          const phone=c.phone.replace(/^55/,'').replace(/(\d{2})(\d{5}?)(\d{4})/,'($1) $2-$3');
+          return'<div style="background:#fff;border-radius:9px;padding:9px 10px;margin-bottom:7px;box-shadow:0 1px 4px rgba(0,0,0,.08);">'
+            // Nome e heat
+            +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;">'
+            +'<div style="font-size:.78rem;font-weight:700;color:#1a1a1a;line-height:1.3;flex:1;">'+esc(cleanNome(c.nome))+'</div>'
+            +'<span style="font-size:.65rem;color:'+heat.color+';margin-left:4px;flex-shrink:0;">'+heat.icon+' '+heat.label+'</span>'
+            +'</div>'
+            // Telefone
+            +'<div style="font-size:.65rem;color:#888;margin-bottom:7px;">'+esc(phone)+'</div>'
+            // Ações
+            +'<div style="display:flex;gap:4px;align-items:center;">'
+            +'<button onclick="window.open(\'https://wa.me/'+c.phone+'\',\'_blank\')" style="flex:0 0 auto;background:#25d366;color:#fff;border:none;border-radius:6px;padding:4px 8px;font-size:.68rem;cursor:pointer;">💬</button>'
+            +'<select onchange="moveCardToLabel('+i+',this.value);this.value=\'\';" style="flex:1;font-size:.65rem;background:#f5f5f5;border:1px solid #ddd;border-radius:6px;padding:3px 4px;color:#444;cursor:pointer;">'
+            +'<option value="">↔ Mover</option>'
+            +FUNIL_ORDER.filter(n=>n!==num&&LABEL_MAP[n]).map(n=>'<option value="'+n+'">'+esc(LABEL_MAP[n].name)+'</option>').join('')
+            +'</select>'
+            +'</div>'
+            +'</div>';
+        }).join('')
+        +'</div>';
+    }).join('')
+    +'</div>';
 }
 
 let crmKanbanMode=false;
