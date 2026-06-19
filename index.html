@@ -3840,23 +3840,19 @@ async function autoBackupIfNeeded(){
 const FUNIL_ORDER=['ht','rcv','01','02','03','04','05','07','00','06'];
 let _funilInterval=null;
 let _funilLastSync=null;
+let _funilData=[];
 
 async function fetchFunilFromSB(){
   if(!sbClient)return;
   try{
     const{data}=await sbClient.from('contacts')
-      .select('id,phone,nome,wa_label,last_contact,done')
-      .not('wa_label','is',null)
-      .limit(5000);
-    if(data){
-      // Upsert into contacts array
+      .select('id,phone,nome,wa_label,last_contact,estado')
+      .not('wa_label','is',null).neq('wa_label','').limit(5000);
+    if(data&&data.length){
+      _funilData=data;
       data.forEach(row=>{
         const c=contacts.find(x=>x.id===row.id||x.phone===row.phone);
-        if(c){
-          c.wa_label=row.wa_label||c.wa_label;
-          c.lastContact=row.last_contact||c.lastContact;
-          c.done=row.done||c.done;
-        }
+        if(c){c.wa_label=row.wa_label;c.lastContact=row.last_contact||c.lastContact;}
       });
       saveStorage();
       _funilLastSync=new Date();
@@ -3867,8 +3863,7 @@ async function fetchFunilFromSB(){
 }
 
 async function refreshFunil(){
-  const el=$id('funilBoard');
-  if(el)el.style.opacity='.5';
+  const el=$id('funilBoard');if(el)el.style.opacity='.5';
   await fetchFunilFromSB();
   renderFunilBoard();
   if(el)el.style.opacity='1';
@@ -3877,90 +3872,74 @@ async function refreshFunil(){
 function startFunilAutoRefresh(){
   clearInterval(_funilInterval);
   fetchFunilFromSB().then(()=>renderFunilBoard());
-  _funilInterval=setInterval(async()=>{
-    await fetchFunilFromSB();
-    renderFunilBoard();
-  },30000);
+  _funilInterval=setInterval(async()=>{await fetchFunilFromSB();renderFunilBoard();},30000);
 }
-function stopFunilAutoRefresh(){
-  clearInterval(_funilInterval);
-  _funilInterval=null;
+function stopFunilAutoRefresh(){clearInterval(_funilInterval);_funilInterval=null;}
+
+function getLabelFromWa(wa_label){
+  if(!wa_label)return null;
+  const m=wa_label.match(/^(\d{2})/);if(m)return m[1];
+  const clean=wa_label.trim().toLowerCase();
+  if(clean==='ht')return'ht';if(clean==='rcv')return'rcv';
+  return null;
 }
 
-async function moveCardToLabel(contactIdx,newNum){
-  const c=contacts[contactIdx];if(!c)return;
-  const newLabel=Object.entries(LABEL_MAP).find(([k])=>k===newNum)?.[1];
-  if(!newLabel)return;
-  // Monta o novo wa_label com prefixo numérico ou texto puro
-  const newWaLabel=newNum.match(/^\d/)?newNum+' - '+newLabel.name:newLabel.name;
-  // Atualiza local
-  c.wa_label=newWaLabel;
-  saveStorage();
-  renderFunilBoard();
-  // Atualiza Supabase
-  if(sbClient&&c.id){
-    sbClient.from('contacts').update({wa_label:newWaLabel}).eq('id',c.id)
-      .then(()=>toast('✅ '+cleanNome(c.nome)+' → '+newLabel.name))
-      .catch(e=>toast('❌ Erro ao mover: '+e.message,'err'));
-  }else{
-    toast('✅ '+cleanNome(c.nome)+' → '+newLabel.name);
+async function moveCardToLabel(phone,newNum){
+  const info=LABEL_MAP[newNum];if(!info)return;
+  const newWaLabel=newNum.match(/^\d/)?newNum+' - '+info.name:info.name;
+  const row=_funilData.find(r=>r.phone===phone);if(row)row.wa_label=newWaLabel;
+  const c=contacts.find(x=>x.phone===phone);if(c)c.wa_label=newWaLabel;
+  saveStorage();renderFunilBoard();
+  if(sbClient){
+    sbClient.from('contacts').update({wa_label:newWaLabel}).eq('phone',phone)
+      .then(({error})=>error?toast('❌ '+error.message):toast('✅ → '+info.name))
+      .catch(e=>toast('❌ '+e.message));
   }
 }
 
 function renderFunilBoard(){
   const el=$id('funilBoard');if(!el)return;
-  // Agrupa por label
+  const source=_funilData.length?_funilData:contacts.filter(c=>c.wa_label);
+  if(!source.length){
+    el.innerHTML='<div style="text-align:center;padding:32px;color:#666;font-size:.82rem;">Nenhum lead com etiqueta.<br>Clique 🔄 para sincronizar do Supabase.</div>';return;
+  }
   const groups={};
   FUNIL_ORDER.forEach(n=>{groups[n]=[];});
-  contacts.forEach((c,i)=>{
-    if(!c.wa_label)return;
-    const num=getLabelNum(c);
-    if(num&&groups[num]!==undefined)groups[num].push({c,i});
+  source.forEach(row=>{
+    const num=getLabelFromWa(row.wa_label||'');
+    if(num!==null&&groups[num]!==undefined)groups[num].push(row);
   });
-  // Colunas só com leads
   const activeCols=FUNIL_ORDER.filter(n=>groups[n]&&groups[n].length>0);
-  if(!activeCols.length){
-    el.innerHTML='<div style="text-align:center;padding:32px;color:#666;font-size:.82rem;">Nenhum lead com etiqueta ainda.<br>A extensão sincroniza automaticamente.</div>';
-    return;
-  }
-  const moveOpts=FUNIL_ORDER.filter(n=>LABEL_MAP[n]).map(n=>'<option value="'+n+'">'+esc(LABEL_MAP[n].name)+'</option>').join('');
-  el.innerHTML='<div style="display:flex;gap:10px;overflow-x:auto;padding-bottom:12px;min-height:200px;">'
+  if(!activeCols.length){el.innerHTML='<div style="text-align:center;padding:32px;color:#666;">Nenhum lead com etiqueta.</div>';return;}
+  el.innerHTML='<div style="display:flex;gap:10px;overflow-x:auto;padding-bottom:12px;">'
     +activeCols.map(num=>{
       const info=LABEL_MAP[num]||{name:num,color:'#aaa'};
-      const list=groups[num];
-      const col=info.color;
-      return'<div style="flex:0 0 200px;min-width:200px;background:'+col+'15;border:1px solid '+col+'40;border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:0;">'
-        // Header da coluna
+      const list=groups[num];const col=info.color;
+      return'<div style="flex:0 0 200px;min-width:200px;background:'+col+'15;border:1px solid '+col+'40;border-radius:12px;padding:10px;">'
         +'<div style="display:flex;align-items:center;gap:7px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid '+col+'30;">'
         +'<span style="width:9px;height:9px;border-radius:50%;background:'+col+';flex-shrink:0;display:inline-block;"></span>'
         +'<span style="font-size:.78rem;font-weight:700;color:'+col+';">'+esc(info.name)+'</span>'
         +'<span style="font-size:.68rem;color:#666;margin-left:auto;background:'+col+'25;border-radius:10px;padding:1px 7px;">'+list.length+'</span>'
         +'</div>'
-        // Cards
-        +list.map(({c,i})=>{
-          const heat=getHeat(c);
-          const phone=c.phone.replace(/^55/,'').replace(/(\d{2})(\d{5}?)(\d{4})/,'($1) $2-$3');
+        +list.map(row=>{
+          const nome=cleanNome(row.nome||row.phone||'');
+          const phone=row.phone||'';
+          const heat=getHeat({lastContact:row.last_contact||''});
+          const dp=phone.replace(/^55/,'').replace(/(\d{2})(\d{5})(\d{4})/,'($1) $2-$3');
           return'<div style="background:#fff;border-radius:9px;padding:9px 10px;margin-bottom:7px;box-shadow:0 1px 4px rgba(0,0,0,.08);">'
-            // Nome e heat
             +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;">'
-            +'<div style="font-size:.78rem;font-weight:700;color:#1a1a1a;line-height:1.3;flex:1;">'+esc(cleanNome(c.nome))+'</div>'
+            +'<div style="font-size:.78rem;font-weight:700;color:#1a1a1a;line-height:1.3;flex:1;">'+esc(nome)+'</div>'
             +'<span style="font-size:.65rem;color:'+heat.color+';margin-left:4px;flex-shrink:0;">'+heat.icon+' '+heat.label+'</span>'
             +'</div>'
-            // Telefone
-            +'<div style="font-size:.65rem;color:#888;margin-bottom:7px;">'+esc(phone)+'</div>'
-            // Ações
+            +'<div style="font-size:.65rem;color:#888;margin-bottom:7px;">'+esc(dp)+'</div>'
             +'<div style="display:flex;gap:4px;align-items:center;">'
-            +'<button onclick="window.open(\'https://wa.me/'+c.phone+'\',\'_blank\')" style="flex:0 0 auto;background:#25d366;color:#fff;border:none;border-radius:6px;padding:4px 8px;font-size:.68rem;cursor:pointer;">💬</button>'
-            +'<select onchange="moveCardToLabel('+i+',this.value);this.value=\'\';" style="flex:1;font-size:.65rem;background:#f5f5f5;border:1px solid #ddd;border-radius:6px;padding:3px 4px;color:#444;cursor:pointer;">'
+            +'<button data-ph="'+phone+'" onclick="openWa(this.dataset.ph)" style="flex:0 0 auto;background:#25d366;color:#fff;border:none;border-radius:6px;padding:4px 8px;font-size:.68rem;cursor:pointer;">💬</button>'
+            +'<select data-ph="'+phone+'" onchange="moveCardToLabel(this.dataset.ph,this.value);this.value=\'\';" style="flex:1;font-size:.65rem;background:#f5f5f5;border:1px solid #ddd;border-radius:6px;padding:3px 4px;color:#444;cursor:pointer;">'
             +'<option value="">↔ Mover</option>'
             +FUNIL_ORDER.filter(n=>n!==num&&LABEL_MAP[n]).map(n=>'<option value="'+n+'">'+esc(LABEL_MAP[n].name)+'</option>').join('')
-            +'</select>'
-            +'</div>'
-            +'</div>';
-        }).join('')
-        +'</div>';
-    }).join('')
-    +'</div>';
+            +'</select></div></div>';
+        }).join('')+'</div>';
+    }).join('')+'</div>';
 }
 
 let crmKanbanMode=false;
