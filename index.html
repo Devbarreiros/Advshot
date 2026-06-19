@@ -576,6 +576,7 @@ body,input,select,textarea,.card,.modal,.ci,.crm-card,.stat-box,.fu-card,.tpl-ca
 <div class="page" id="page-crm">
   <div class="sub-tabs">
     <button class="sub-tab active" onclick="goSub('cont')">👥 Contatos</button>
+    <button class="sub-tab" onclick="goSub('funil')">📊 Funil</button>
     <button class="sub-tab" onclick="goSub('fu')">🔄 Follow Up</button>
   </div>
   <div class="sub-page active" id="sub-cont">
@@ -647,6 +648,15 @@ body,input,select,textarea,.card,.modal,.ci,.crm-card,.stat-box,.fu-card,.tpl-ca
         <button class="btn" style="background:var(--red);color:#fff;font-size:.76rem;white-space:nowrap;" onclick="deleteSelected()">🗑 Remover</button>
         <button class="btn btn-ghost" style="font-size:.76rem;border-color:#4a4a6a;color:#aaa;" onclick="toggleBatchMode()">✕</button>
       </div>
+    </div>
+  </div>
+  <div class="sub-page" id="sub-funil">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <div class="card-title" style="margin:0;">📊 Funil — etapas do WhatsApp</div>
+        <button class="btn btn-ghost" style="font-size:.74rem;" onclick="refreshFunil()">🔄 Atualizar</button>
+      </div>
+      <div id="funilBoard"></div>
     </div>
   </div>
   <div class="sub-page" id="sub-fu">
@@ -1449,6 +1459,99 @@ function getEstado(phone){const n=phone.replace(/\D/g,'');const local=n.startsWi
 
 // ═══ DADOS ═══════════════════════════════════════════════
 const VARS=["{SAUDACAO}, falo com {NOME}?","Olá! {SAUDACAO}, esse contato é de {NOME}?","{SAUDACAO}! Estou falando com {NOME}?","Oi, {SAUDACAO}! É a {NOME}?","{SAUDACAO}! Aqui é com {NOME}?","Olá, {SAUDACAO}! Poderia confirmar se falo com {NOME}?","Oi! {SAUDACAO}, esse é o contato da {NOME}?","{SAUDACAO}! Com {NOME}?","Olá, {SAUDACAO}, tudo bem? Falo com {NOME}?","Oi, {SAUDACAO}! Gostaria de confirmar, esse é o número de {NOME}?"];
+// ═══ HEAT SCORE POR DIAS ══════════════════════════════════
+function getDaysSince(dateStr){
+  if(!dateStr)return 999;
+  // Aceita dd/mm/yyyy ou yyyy-mm-dd
+  let d;
+  if(dateStr.includes('/')){const[dd,mm,yy]=dateStr.split('/');d=new Date(yy,mm-1,dd);}
+  else d=new Date(dateStr);
+  const t=new Date();t.setHours(0,0,0,0);
+  return Math.max(0,Math.floor((t-d)/86400000));
+}
+function getHeat(c){
+  const days=getDaysSince(c.lastContact);
+  if(days<=1)return{icon:'🔥',label:'hoje',color:'#ef4444'};
+  if(days<=3)return{icon:'🔥',label:days+'d',color:'#ef4444'};
+  if(days<=7)return{icon:'🌡️',label:days+'d',color:'#f97316'};
+  if(days<=15)return{icon:'❄️',label:days+'d',color:'#3b82f6'};
+  return{icon:'🧊',label:days+'d',color:'#6b7280'};
+}
+
+// ═══ MENSAGENS POR ETIQUETA ════════════════════════════════
+const FU_BY_LABEL={
+  '00':[
+    '{SAUDACAO}, {NOME}! Tentei te contatar há alguns dias — tudo bem por aí?',
+    'Oi {NOME}! Passei para ver se houve algo que impediu de continuar nossa conversa.',
+    '{SAUDACAO}, {NOME}. Vi que não consegui retorno — ainda posso te ajudar com algo?'
+  ],
+  '01':[
+    '{SAUDACAO}, {NOME}! Você chegou a dar uma olhada na situação que conversamos?',
+    'Oi {NOME}! Queria entender melhor o seu caso — tem um minutinho para conversar?',
+    '{SAUDACAO}, {NOME}. Vou ficando à disposição. Quando quiser avançar é só chamar.'
+  ],
+  '02':[
+    '{SAUDACAO}, {NOME}! Conseguiu reunir os documentos que mencionei?',
+    'Oi {NOME}! Para dar continuidade só preciso dos documentos — conseguiu separar?',
+    '{SAUDACAO}, {NOME}. Qualquer dificuldade para reunir os documentos, me fala que te oriento.'
+  ],
+  '03':[
+    '{SAUDACAO}, {NOME}! Terminei de analisar o seu caso — quando temos um horário para conversar?',
+    'Oi {NOME}! A análise está pronta. Podemos agendar um horário esta semana?',
+    '{SAUDACAO}, {NOME}. Tenho novidades sobre o seu caso — quando podemos conversar?'
+  ],
+  '04':[
+    '{SAUDACAO}, {NOME}! Terminei de analisar o seu caso — quando temos um horário para conversar?',
+    'Oi {NOME}! A análise está pronta. Podemos agendar esta semana?',
+    '{SAUDACAO}, {NOME}. Tenho novidades sobre o seu caso — quando podemos conversar?'
+  ],
+  '05':[
+    '{SAUDACAO}, {NOME}! Te enviei uma proposta e não tive retorno — conseguiu visualizar?',
+    'Oi {NOME}! Queria saber se você teve oportunidade de analisar a proposta que encaminhei.',
+    '{SAUDACAO}, {NOME}. Alguma dúvida sobre a proposta? Pode me chamar à vontade.'
+  ],
+  '07':[
+    '{SAUDACAO}, {NOME}! Como está sendo a experiência até agora? Precisando de algo é só chamar.',
+    'Oi {NOME}! Passando para ver se está tudo certo com o seu processo.',
+    '{SAUDACAO}, {NOME}. Qualquer dúvida sobre o andamento do seu caso, estou à disposição.'
+  ]
+};
+
+function getMsgByLabel(c,idx){
+  const lbl=c.wa_label||'';
+  const num=lbl.match(/^(\d{2})/)?lbl.match(/^(\d{2})/)[1]:null;
+  const pool=num&&FU_BY_LABEL[num]?FU_BY_LABEL[num]:null;
+  if(pool){
+    const safeIdx=Math.max(0,idx%pool.length);
+    return applyVars(pool[safeIdx],cleanNome(c.nome));
+  }
+  const lv=c.fuLevel===0?1:Math.min(c.fuLevel+1,3);
+  if(c.fuMsgIdx[lv]===-1)c.fuMsgIdx[lv]=0;
+  return applyVars(FU[lv][Math.max(0,c.fuMsgIdx[lv])],cleanNome(c.nome));
+}
+function getLabelNum(c){
+  const m=(c.wa_label||'').match(/^(\d{2})/);return m?m[1]:null;
+}
+const LABEL_MAP={
+  '00':{name:'Não respondeu', color:'#6b7280'},
+  '01':{name:'Respondeu',     color:'#22c55e'},
+  '02':{name:'Dados',         color:'#f97316'},
+  '03':{name:'Análise',       color:'#a855f7'},
+  '04':{name:'Análise',       color:'#a855f7'},
+  '05':{name:'Proposta',      color:'#3b82f6'},
+  '06':{name:'Descarte',      color:'#ef4444'},
+  '07':{name:'Cliente',       color:'#eab308'},
+};
+function getLabelName(c){
+  if(!c.wa_label)return null;
+  const num=getLabelNum(c);
+  return(LABEL_MAP[num]||{name:c.wa_label}).name;
+}
+function getLabelColor(c){
+  const num=getLabelNum(c);
+  return(LABEL_MAP[num]||{color:'#6b7280'}).color;
+}
+
 const FU={1:["{SAUDACAO}, {NOME}! Te enviei uma proposta e não tive retorno — conseguiu abrir?","Oi {NOME}, {SAUDACAO}! Queria saber se você teve oportunidade de analisar o que te enviei.","{SAUDACAO}, {NOME}! Passando para ver se chegou as informações que encaminhei.","Oi {NOME}! Enviei uma proposta e queria entender se chegou até você.","{SAUDACAO}, {NOME}! Só queria confirmar se você recebeu o material que te enviei."],2:["{SAUDACAO}, {NOME}! Já entramos em contato sobre nossa proposta e não tivemos retorno.","Oi {NOME}! Sei que a rotina é corrida, mas queria entender se ainda há interesse.","{SAUDACAO}, {NOME}. Tentei contato algumas vezes — há alguma dúvida que posso esclarecer?","Olá {NOME}! Gostaríamos de saber se há algo que travou a decisão.","{SAUDACAO}, {NOME}! Poderíamos ter um feedback, mesmo que negativo?"],3:["{SAUDACAO}, {NOME}. Entramos em contato algumas vezes sem retorno. Posso entender que não há interesse?","Olá {NOME}. Tentei contato sem sucesso. Para encerrar formalmente, poderia confirmar?","{SAUDACAO}, {NOME}. Vou encerrar este acompanhamento. Qualquer necessidade futura, é só acionar.","Olá {NOME}. Entendo que o momento não é oportuno. Portas abertas.","{SAUDACAO}, {NOME}. Encerrando o ciclo desta proposta. Se mudar de ideia, estarei à disposição."]};
 const STOPTS=[{v:'pendente',l:'⏳ Pendente'},{v:'respondeu',l:'✅ Respondeu'},{v:'nao_respondeu',l:'🔇 Não respondeu'},{v:'interessado',l:'💰 Interessado'},{v:'retornar',l:'🔄 Retornar'},{v:'nao_quer',l:'❌ Não quer'},{v:'sem_viabilidade',l:'🚫 Sem viabilidade'},{v:'fechado',l:'🏆 Fechado'},{v:'errado',l:'🚫 Nº errado'}];
 
@@ -1543,9 +1646,10 @@ function goSub(s){
   document.querySelectorAll('.sub-page').forEach(e=>e.classList.remove('active'));
   document.querySelectorAll('.sub-tab').forEach(e=>e.classList.remove('active'));
   const sp=$id('sub-'+s);if(sp)sp.classList.add('active');
-  const tabs=['cont','fu'];
+  const tabs=['cont','funil','fu'];
   const tab=document.querySelectorAll('.sub-tab')[tabs.indexOf(s)];if(tab)tab.classList.add('active');
-  if(s==='fu')renderFU();else renderCRM();
+  if(s==='funil')renderFunilBoard();
+  if(s==='fu')renderFU();else if(s==='cont')renderCRM();
 }
 
 // ═══ MENSAGEM ═════════════════════════════════════════════
@@ -2091,9 +2195,13 @@ function renderCRM(){
     return'<div class="crm-card '+(od?'od ':'')+( batchMode&&selectedLeads.has(i)?'selected':'')+'" id="bcard-'+i+'" '+(batchMode?'onclick="toggleLeadSelection('+i+')" style="cursor:pointer;"':'')+' data-real-idx="'+i+'">'
       +(batchMode?'<div style="padding:10px 12px 0;"><div class="lead-checkbox '+(selectedLeads.has(i)?'on':'')+'" id="bchk-'+i+'">'+(selectedLeads.has(i)?'✓':'')+'</div></div>':'')
       +'<div class="crm-head"><div style="flex:1;min-width:0;">'
-      +'<div id="crm-view-'+i+'"><div class="crm-name">'+esc(cleanNome(c.nome))+' <span class="estado-badge">'+(c.estado||'?')+'</span>'+(od?'<span class="od-tag">⚠️ Atraso</span>':'')+getScoreBadge(c)+'</div>'
-      +(c.wa_label?'<div style="margin-top:3px;"><span style="font-size:.68rem;background:#1a2a1a;color:#8aad7a;border:1px solid #2a4a2a;border-radius:5px;padding:2px 7px;">📱 '+esc(c.wa_label)+'</span></div>':'')
-      +'<div class="crm-sub">'+c.phone+(camp&&camp.id!=='default'?' · 📁 '+esc(camp.name):'')+(c.sentAt?' · 📤 '+c.sentAt:'')+'</div>'
+      +'<div id="crm-view-'+i+'"><div class="crm-name">'+esc(cleanNome(c.nome))+' <span class="estado-badge">'+(c.estado||'?')+'</span>'+(od?'<span class="od-tag">⚠️ Atraso</span>':'')+'</div>'
+      // wa_label badge — etapa principal
+      +(c.wa_label?'<div style="margin:3px 0 2px;display:flex;align-items:center;gap:6px;">'
+        +'<span style="font-size:.72rem;background:'+getLabelColor(c)+'22;color:'+getLabelColor(c)+';border:1px solid '+getLabelColor(c)+'55;border-radius:5px;padding:2px 8px;font-weight:600;">'+esc(getLabelName(c)||c.wa_label)+'</span>'
+        +(c.lastContact?'<span style="font-size:.68rem;color:'+getHeat(c).color+';">'+getHeat(c).icon+' '+getHeat(c).label+'</span>':'')
+        +'</div>':'')
+      +'<div class="crm-sub">'+c.phone+(c.lastContact&&!c.wa_label?' · '+getHeat(c).icon+' '+getHeat(c).label:'')+(c.sentAt?' · 📤 '+c.sentAt:'')+'</div></div>'
       +'<div style="font-size:.73rem;color:#888;margin-top:3px;">👉 '+getNextAction(c)+'</div></div>'
       +'<div id="crm-edit-'+i+'" style="display:none;flex-direction:column;gap:4px;">'
       +'<input id="edit-nome-'+i+'" class="edit-inline" type="text" value="'+esc(c.nome)+'" placeholder="Nome">'
@@ -2171,27 +2279,67 @@ async function aiSuggest(i){
   }catch(e){box.innerHTML='<strong>✨ IA:</strong> Erro.';}
 }
 function renderFU(){
-  const elig=contacts.filter(c=>c.done&&!['nao_quer','errado','fechado','sem_viabilidade'].includes(c.status));
+  const elig=contacts.filter(c=>c.done&&!['nao_quer','errado','fechado','sem_viabilidade','descartado'].includes(c.status)&&c.status!=='nao_respondeu_sem_label');
   renderFuEstadoFilter(elig);
+
   let list=elig;
+  // Filtro por nível
   if(fuF!=='todos')list=list.filter(c=>String(c.fuLevel===0?1:Math.min(c.fuLevel+1,3))===fuF);
   if(fuEstado!=='todos')list=list.filter(c=>(c.estado||'?')===fuEstado);
+
+  // Ordena: com wa_label primeiro, depois por calor (dias recentes primeiro)
+  list=[...list].sort((a,b)=>{
+    const aHasLabel=a.wa_label?0:1, bHasLabel=b.wa_label?0:1;
+    if(aHasLabel!==bHasLabel)return aHasLabel-bHasLabel;
+    return getDaysSince(a.lastContact)-getDaysSince(b.lastContact);
+  });
+
   const el=$id('fuList');if(!el)return;
   if(!list.length){el.innerHTML='<div class="empty">Nenhum lead disponível.<br><small>Aparecem após o primeiro disparo.</small></div>';return;}
-  const LVLS={1:'Nível 1 — Suave',2:'Nível 2 — Médio',3:'Nível 3 — Encerramento'};
+  const LVLS={1:'Nível 1',2:'Nível 2',3:'Nível 3'};
   const LCS={1:'l1',2:'l2',3:'l3'};
   el.innerHTML=list.map(c=>{
     const i=contacts.indexOf(c);
     const lv=c.fuLevel===0?1:Math.min(c.fuLevel+1,3);
     if(c.fuMsgIdx[lv]===-1)c.fuMsgIdx[lv]=0;
     const dn=cleanNome(c.nome);
-    const msg=applyVars(FU[lv][Math.max(0,c.fuMsgIdx[lv])],dn);
-    return'<div class="fu-card"><div class="fu-head"><div class="fu-info"><div class="fu-name">'+esc(dn)+' <span class="estado-badge">'+(c.estado||'?')+'</span></div><div class="fu-sub">'+c.phone+(c.lastContact?' · último: '+c.lastContact:'')+'</div></div><span class="lvl-badge '+LCS[lv]+'">'+LVLS[lv]+'</span></div>'
-    +'<div class="fu-body"><div class="fu-msg-lbl">Mensagem sugerida</div><div class="fu-msg" id="fum-'+i+'-'+lv+'">'+esc(msg)+'</div>'
-    +'<div class="ai-suggest" id="aibox-'+i+'" style="display:none;"><strong>✨ IA</strong></div>'
-    +'<div class="fu-acts"><button class="btn btn-taupe" onclick="sendFu('+i+','+lv+')">💬 Enviar</button><button class="btn btn-ghost" onclick="regenFu('+i+','+lv+')">🔄 Variar</button><button class="btn btn-ai" onclick="aiGenFu('+i+','+lv+')">✨ IA</button><button class="btn btn-ghost" onclick="aiSuggest('+i+')">💡 Próximo passo</button></div></div>'
-    +'<div class="fu-resp"><span class="resp-lbl">Resposta:</span><button class="rb" onclick="setFuResp('+i+','+lv+',\'pos\')">✅ Interessado</button><button class="rb" onclick="setFuResp('+i+','+lv+',\'neu\')">🔄 Sem resposta</button><button class="rb" onclick="setFuResp('+i+','+lv+',\'neg\')">❌ Sem interesse</button></div></div>';
+    const msg=getMsgByLabel(c,c.fuMsgIdx[lv]||0);
+    const heat=getHeat(c);
+    const labelName=getLabelName(c);
+    const labelColor=getLabelColor(c);
+    const labelBadge=labelName
+      ?'<span style="font-size:.65rem;background:'+labelColor+'22;color:'+labelColor+';border:1px solid '+labelColor+'44;border-radius:4px;padding:1px 6px;margin-left:5px;">'+esc(labelName)+'</span>'
+      :'';
+    const heatBadge='<span style="font-size:.68rem;color:'+heat.color+';margin-left:4px;">'+heat.icon+' '+heat.label+'</span>';
+
+    return'<div class="fu-card"><div class="fu-head"><div class="fu-info">'
+      +'<div class="fu-name">'+esc(dn)+' <span class="estado-badge">'+(c.estado||'?')+'</span>'+labelBadge+heatBadge+'</div>'
+      +'<div class="fu-sub">'+c.phone+(c.lastContact?' · último: '+c.lastContact:'')+'</div></div>'
+      +'<span class="lvl-badge '+LCS[lv]+'">'+LVLS[lv]+'</span></div>'
+      +'<div class="fu-body"><div class="fu-msg-lbl">Mensagem sugerida</div>'
+      +'<div class="fu-msg" id="fum-'+i+'-'+lv+'">'+esc(msg)+'</div>'
+      +'<div class="ai-suggest" id="aibox-'+i+'" style="display:none;"><strong>✨ IA</strong></div>'
+      +'<div class="fu-acts">'
+      +'<button class="btn btn-taupe" onclick="sendFu('+i+','+lv+')">💬 Enviar</button>'
+      +'<button class="btn btn-ghost" onclick="regenFuLabel('+i+','+lv+')">🔄 Variar</button>'
+      +'<button class="btn btn-ai" onclick="aiGenFu('+i+','+lv+')">✨ IA</button>'
+      +'<button class="btn btn-ghost" onclick="aiSuggest('+i+')">💡 Próximo passo</button>'
+      +'</div></div>'
+      +'<div class="fu-resp"><span class="resp-lbl">Resposta:</span>'
+      +'<button class="rb" onclick="setFuResp('+i+','+lv+',\'pos\')">✅ Interessado</button>'
+      +'<button class="rb" onclick="setFuResp('+i+','+lv+',\'neu\')">🔄 Sem resposta</button>'
+      +'<button class="rb" onclick="setFuResp('+i+','+lv+',\'neg\')">❌ Sem interesse</button>'
+      +'</div></div>';
   }).join('');
+}
+
+function regenFuLabel(i,lv){
+  const c=contacts[i];if(!c)return;
+  if(!c.fuMsgIdx)c.fuMsgIdx={1:-1,2:-1,3:-1};
+  c.fuMsgIdx[lv]=(c.fuMsgIdx[lv]||0)+1;
+  const msg=getMsgByLabel(c,c.fuMsgIdx[lv]);
+  const el=$id('fum-'+i+'-'+lv);
+  if(el)el.textContent=msg;
 }
 // ═══ DASHBOARD ════════════════════════════════════════════
 function renderDash(){
@@ -3650,6 +3798,65 @@ async function autoBackupIfNeeded(){
     console.log('ADV Shot: backup automático realizado.');
   }
 }
+// ═══ FUNIL POR ETIQUETA ════════════════════════════════════
+const FUNIL_ORDER=['01','02','03','04','05','07','00','06'];
+
+function renderFunilBoard(){
+  const el=$id('funilBoard');if(!el)return;
+  const groups={};
+  FUNIL_ORDER.forEach(n=>{groups[n]=[];});
+  contacts.filter(c=>c.done).forEach(c=>{
+    const num=getLabelNum(c);
+    if(num&&groups[num])groups[num].push(c);
+  });
+  const renderCard=(c)=>{
+    const heat=getHeat(c);
+    return'<div style="background:rgba(255,255,255,.04);border-radius:7px;padding:8px 10px;margin-bottom:5px;display:flex;justify-content:space-between;align-items:center;">'
+      +'<div>'
+      +'<div style="font-size:.8rem;font-weight:600;color:var(--beige);">'+esc(cleanNome(c.nome))+'</div>'
+      +'<div style="font-size:.68rem;color:#aaa;margin-top:1px;">'+esc(c.phone)+'</div>'
+      +'</div>'
+      +'<div style="display:flex;align-items:center;gap:6px;">'
+      +'<span style="font-size:.68rem;color:'+heat.color+';">'+heat.icon+' '+heat.label+'</span>'
+      +'<button onclick="window.open(\'https://wa.me/'+c.phone+'\',\'_blank\')" style="background:none;border:none;cursor:pointer;font-size:14px;" title="Abrir WhatsApp">💬</button>'
+      +'</div></div>';
+  };
+  let html='';
+  FUNIL_ORDER.forEach(num=>{
+    const info=LABEL_MAP[num]||{name:num,color:'#aaa'};
+    const list=groups[num]||[];
+    if(!list.length)return;
+    html+='<div style="margin-bottom:14px;">'
+      +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">'
+      +'<span style="width:10px;height:10px;border-radius:50%;background:'+info.color+';display:inline-block;flex-shrink:0;"></span>'
+      +'<span style="font-size:.82rem;font-weight:700;color:'+info.color+';">'+esc(info.name)+'</span>'
+      +'<span style="font-size:.72rem;color:#666;margin-left:auto;">'+list.length+' lead'+(list.length!==1?'s':'')+'</span>'
+      +'</div>'
+      +list.map(renderCard).join('')
+      +'</div>';
+  });
+  if(!html)html='<div style="text-align:center;color:#666;padding:24px;font-size:.82rem;">Nenhum lead com etiqueta ainda.<br>Sincronize a extensão para ver o funil.</div>';
+  el.innerHTML=html;
+}
+
+async function refreshFunil(){
+  const el=$id('funilBoard');
+  if(el)el.innerHTML='<div style="text-align:center;color:#aaa;padding:20px;font-size:.82rem;">🔄 Atualizando...</div>';
+  if(sbClient){
+    try{
+      const{data}=await sbClient.from('contacts').select('id,phone,nome,wa_label,last_contact,done').eq('done',true).not('wa_label','is',null).limit(2000);
+      if(data){
+        data.forEach(row=>{
+          const c=contacts.find(x=>x.id===row.id||x.phone===row.phone);
+          if(c){c.wa_label=row.wa_label||c.wa_label;c.lastContact=row.last_contact||c.lastContact;}
+        });
+        saveStorage();
+      }
+    }catch(e){console.warn('refreshFunil:',e);}
+  }
+  renderFunilBoard();
+}
+
 let crmKanbanMode=false;
 
 const KANBAN_DEFAULT=[
