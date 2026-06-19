@@ -613,6 +613,9 @@ body,input,select,textarea,.card,.modal,.ci,.crm-card,.stat-box,.fu-card,.tpl-ca
         <button class="fb" onclick="setF('nao_quer',event)">❌</button>
         <button class="fb" onclick="setF('sem_viabilidade',event)">🚫</button>
         <button class="fb" onclick="setF('overdue',event)">⚠️</button>
+        <button class="fb" onclick="setF('wa_respondeu',event)" title="WhatsApp: Respondeu">💬</button>
+        <button class="fb" onclick="setF('wa_proposta',event)" title="WhatsApp: Proposta">📋</button>
+        <button class="fb" onclick="setF('wa_analise',event)" title="WhatsApp: Em análise">🔍</button>
       </div>
       <!-- BATCH MODE TOGGLE -->
       <div style="display:flex;gap:6px;margin-bottom:8px;align-items:center;">
@@ -1297,7 +1300,7 @@ function rowToContact(r){
     nextContact:r.next_contact,fuLevel:r.fu_level||0,
     fuMsgIdx:r.fu_msg_idx||{1:-1,2:-1,3:-1},history:r.history||[],
     varIdx:r.var_idx||0,sentHour:r.sent_hour,xlsxRowIdx:r.xlsx_row_idx,
-    fuResp:r.fu_resp
+    fuResp:r.fu_resp,wa_label:r.wa_label||''
   };
 }
 
@@ -2073,6 +2076,9 @@ function renderCRM(){
   let list=contacts;
   if(crmF==='overdue')list=contacts.filter(c=>isOD(c));
   else if(crmF==='hoje')list=contacts.filter(c=>c.done&&c.lastContact===today());
+  else if(crmF==='wa_respondeu')list=contacts.filter(c=>c.wa_label&&c.wa_label.includes('01'));
+  else if(crmF==='wa_proposta')list=contacts.filter(c=>c.wa_label&&c.wa_label.includes('05'));
+  else if(crmF==='wa_analise')list=contacts.filter(c=>c.wa_label&&(c.wa_label.includes('04')||c.wa_label.includes('02')));
   else if(crmF!=='todos')list=contacts.filter(c=>c.status===crmF);
   if(crmSearch)list=list.filter(c=>(c.nome||'').toLowerCase().includes(crmSearch)||(c.phone||'').includes(crmSearch));
   list=sortContacts(list);
@@ -2086,6 +2092,7 @@ function renderCRM(){
       +(batchMode?'<div style="padding:10px 12px 0;"><div class="lead-checkbox '+(selectedLeads.has(i)?'on':'')+'" id="bchk-'+i+'">'+(selectedLeads.has(i)?'✓':'')+'</div></div>':'')
       +'<div class="crm-head"><div style="flex:1;min-width:0;">'
       +'<div id="crm-view-'+i+'"><div class="crm-name">'+esc(cleanNome(c.nome))+' <span class="estado-badge">'+(c.estado||'?')+'</span>'+(od?'<span class="od-tag">⚠️ Atraso</span>':'')+getScoreBadge(c)+'</div>'
+      +(c.wa_label?'<div style="margin-top:3px;"><span style="font-size:.68rem;background:#1a2a1a;color:#8aad7a;border:1px solid #2a4a2a;border-radius:5px;padding:2px 7px;">📱 '+esc(c.wa_label)+'</span></div>':'')
       +'<div class="crm-sub">'+c.phone+(camp&&camp.id!=='default'?' · 📁 '+esc(camp.name):'')+(c.sentAt?' · 📤 '+c.sentAt:'')+'</div>'
       +'<div style="font-size:.73rem;color:#888;margin-top:3px;">👉 '+getNextAction(c)+'</div></div>'
       +'<div id="crm-edit-'+i+'" style="display:none;flex-direction:column;gap:4px;">'
