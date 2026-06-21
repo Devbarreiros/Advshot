@@ -650,18 +650,15 @@ body,input,select,textarea,.card,.modal,.ci,.crm-card,.stat-box,.fu-card,.tpl-ca
       </div>
     </div>
   </div>
-  <div class="sub-page" id="sub-funil">
-    <div class="card" style="overflow-x:hidden;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-        <div class="card-title" style="margin:0;">📊 Funil WhatsApp</div>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <span id="funilLastSync" style="font-size:.68rem;color:#aaa;"></span>
-          <button class="btn btn-ghost" style="font-size:.72rem;padding:4px 10px;" onclick="refreshFunil()">🔄</button>
-        </div>
+  <div class="sub-page" id="sub-funil" style="margin:0 -16px;">
+    <div style="padding:10px 16px 6px;display:flex;justify-content:space-between;align-items:center;">
+      <div style="font-weight:700;font-size:.85rem;color:var(--taupe);letter-spacing:.06em;text-transform:uppercase;">📊 Funil WhatsApp</div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span id="funilLastSync" style="font-size:.65rem;color:#aaa;"></span>
+        <button class="btn btn-ghost" style="font-size:.7rem;padding:3px 10px;" onclick="refreshFunil()">🔄</button>
       </div>
-      <div style="font-size:.72rem;color:#aaa;margin-bottom:12px;">Atualiza automaticamente a cada 30s · clique em ↔ Mover para trocar de etapa</div>
-      <div id="funilBoard" style="margin:0 -16px;padding:0 16px;"></div>
     </div>
+    <div id="funilBoard" style="padding:0 12px 16px;overflow-x:auto;width:100%;box-sizing:border-box;"></div>
   </div>
   <div class="sub-page" id="sub-fu">
     <div class="card">
@@ -3911,35 +3908,38 @@ function renderFunilBoard(){
   });
   const activeCols=FUNIL_ORDER.filter(n=>groups[n]&&groups[n].length>0);
   if(!activeCols.length){el.innerHTML='<div style="text-align:center;padding:32px;color:#666;">Nenhum lead com etiqueta.</div>';return;}
-  el.innerHTML='<div style="display:flex;gap:10px;overflow-x:auto;padding-bottom:12px;">'
+  el.innerHTML='<div style="display:flex;gap:8px;min-width:max-content;padding-bottom:8px;">'
     +activeCols.map(num=>{
       const info=LABEL_MAP[num]||{name:num,color:'#aaa'};
       const list=groups[num];const col=info.color;
-      return'<div style="flex:0 0 200px;min-width:200px;background:'+col+'15;border:1px solid '+col+'40;border-radius:12px;padding:10px;">'
-        +'<div style="display:flex;align-items:center;gap:7px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid '+col+'30;">'
-        +'<span style="width:9px;height:9px;border-radius:50%;background:'+col+';flex-shrink:0;display:inline-block;"></span>'
-        +'<span style="font-size:.78rem;font-weight:700;color:'+col+';">'+esc(info.name)+'</span>'
-        +'<span style="font-size:.68rem;color:#666;margin-left:auto;background:'+col+'25;border-radius:10px;padding:1px 7px;">'+list.length+'</span>'
+      return'<div style="flex:0 0 210px;background:'+col+'12;border:1px solid '+col+'35;border-radius:10px;padding:8px;display:flex;flex-direction:column;">'
+        +'<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid '+col+'30;flex-shrink:0;">'
+        +'<span style="width:8px;height:8px;border-radius:50%;background:'+col+';flex-shrink:0;display:inline-block;"></span>'
+        +'<span style="font-size:.74rem;font-weight:700;color:'+col+';white-space:nowrap;">'+esc(info.name)+'</span>'
+        +'<span style="font-size:.65rem;color:#888;margin-left:auto;background:'+col+'20;border-radius:8px;padding:1px 6px;">'+list.length+'</span>'
         +'</div>'
+        +'<div style="overflow-y:auto;max-height:420px;display:flex;flex-direction:column;gap:5px;">'
         +list.map(row=>{
           const nome=cleanNome(row.nome||row.phone||'');
           const phone=row.phone||'';
           const heat=getHeat({lastContact:row.last_contact||''});
-          const dp=phone.replace(/^55/,'').replace(/(\d{2})(\d{5})(\d{4})/,'($1) $2-$3');
-          return'<div style="background:#fff;border-radius:9px;padding:9px 10px;margin-bottom:7px;box-shadow:0 1px 4px rgba(0,0,0,.08);">'
-            +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;">'
-            +'<div style="font-size:.78rem;font-weight:700;color:#1a1a1a;line-height:1.3;flex:1;">'+esc(nome)+'</div>'
-            +'<span style="font-size:.65rem;color:'+heat.color+';margin-left:4px;flex-shrink:0;">'+heat.icon+' '+heat.label+'</span>'
+          const dp=phone.replace(/^55/,'').replace(/(\d{2})(\d{5})(\d{4})/,'$1 $2-$3');
+          return'<div style="background:#fff;border-radius:7px;padding:7px 8px;box-shadow:0 1px 3px rgba(0,0,0,.06);">'
+            +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:4px;">'
+            +'<div style="font-size:.74rem;font-weight:700;color:#1a1a1a;line-height:1.25;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(nome)+'</div>'
+            +'<span style="font-size:.6rem;color:'+heat.color+';white-space:nowrap;flex-shrink:0;">'+heat.icon+' '+heat.label+'</span>'
             +'</div>'
-            +'<div style="font-size:.65rem;color:#888;margin-bottom:7px;">'+esc(dp)+'</div>'
-            +'<div style="display:flex;gap:4px;align-items:center;">'
-            +'<button data-ph="'+phone+'" onclick="openWa(this.dataset.ph)" style="flex:0 0 auto;background:#25d366;color:#fff;border:none;border-radius:6px;padding:4px 8px;font-size:.68rem;cursor:pointer;">💬</button>'
-            +'<select data-ph="'+phone+'" onchange="moveCardToLabel(this.dataset.ph,this.value);this.value=\'\';" style="flex:1;font-size:.65rem;background:#f5f5f5;border:1px solid #ddd;border-radius:6px;padding:3px 4px;color:#444;cursor:pointer;">'
+            +'<div style="font-size:.62rem;color:#aaa;margin:2px 0 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(dp)+'</div>'
+            +'<div style="display:flex;gap:3px;">'
+            +'<button data-ph="'+phone+'" onclick="openWa(this.dataset.ph)" style="flex:0 0 auto;background:#25d366;color:#fff;border:none;border-radius:5px;padding:3px 7px;font-size:.65rem;cursor:pointer;">💬</button>'
+            +'<select data-ph="'+phone+'" onchange="moveCardToLabel(this.dataset.ph,this.value);this.value=\'\';" style="flex:1;font-size:.6rem;background:#f7f7f7;border:1px solid #e0e0e0;border-radius:5px;padding:3px;color:#555;cursor:pointer;min-width:0;">'
             +'<option value="">↔ Mover</option>'
             +FUNIL_ORDER.filter(n=>n!==num&&LABEL_MAP[n]).map(n=>'<option value="'+n+'">'+esc(LABEL_MAP[n].name)+'</option>').join('')
             +'</select></div></div>';
-        }).join('')+'</div>';
-    }).join('')+'</div>';
+        }).join('')
+        +'</div></div>';
+    }).join('')
+    +'</div>';
 }
 
 let crmKanbanMode=false;
