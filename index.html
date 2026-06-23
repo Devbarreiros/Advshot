@@ -1287,7 +1287,7 @@ function contactToRow(c){
     history:c.history||[],var_idx:c.varIdx||0,
     sent_hour:c.sentHour||null,xlsx_row_idx:c.xlsxRowIdx||null,
     fu_resp:c.fuResp||null,score:calcScoreSafe(c),
-    // campos da base de leads
+    // preserva source original — NUNCA transforma planilha → crm
     source:c.source||'crm',
     tags:c.tags||'',
     sheet_name:c.sheet_name||'',
@@ -1311,7 +1311,8 @@ function rowToContact(r){
     nextContact:r.next_contact,fuLevel:r.fu_level||0,
     fuMsgIdx:r.fu_msg_idx||{1:-1,2:-1,3:-1},history:r.history||[],
     varIdx:r.var_idx||0,sentHour:r.sent_hour,xlsxRowIdx:r.xlsx_row_idx,
-    fuResp:r.fu_resp,wa_label:r.wa_label||''
+    fuResp:r.fu_resp,wa_label:r.wa_label||'',
+    source:r.source||null   // ← preserva 'planilha', nunca colapsa para 'crm'
   };
 }
 
@@ -1349,7 +1350,33 @@ async function loadFromSupabase(){
     const prevCamps=[...campaigns];
 
     if(cData.length>0){
-      contacts=cData.map(rowToContact);
+      // Mapa do localStorage pelo id — fonte de verdade local para done=true
+      const localDoneIds=new Set(contacts.filter(c=>c.done).map(c=>c.id));
+      const localByPhone=new Map(contacts.filter(c=>c.done).map(c=>[c.phone,c]));
+      contacts=cData.map(row=>{
+        const c=rowToContact(row);
+        // NUNCA rebaixa done=true para done=false
+        // Verifica por id E por telefone (robustez extra)
+        if(!c.done&&(localDoneIds.has(c.id)||localByPhone.has(c.phone))){
+          c.done=true;
+          c.sentAt=localByPhone.get(c.phone)?.sentAt||c.sentAt;
+          c.lastContact=localByPhone.get(c.phone)?.lastContact||c.lastContact;
+        }
+        return c;
+      });
+      // Log diagnóstico (task #10)
+      const total=contacts.length;
+      const dispatched=contacts.filter(c=>c.done).length;
+      const pending=contacts.filter(c=>!c.done&&!isBlacklisted(c)).length;
+      const nextIdx=contacts.findIndex(c=>!c.done&&!isBlacklisted(c));
+      const nextC=nextIdx>=0?contacts[nextIdx]:null;
+      console.log('[ADV Shot] ── Carga do Supabase ──────────────────────');
+      console.log('[ADV Shot] Total carregados:',total);
+      console.log('[ADV Shot] Disparados (done=true):',dispatched);
+      console.log('[ADV Shot] Pendentes:',pending);
+      if(nextC) console.log('[ADV Shot] Próximo lead:',nextC.phone,'/',nextC.nome,'| idx',nextIdx,'| motivo: primeiro done=false em ordem');
+      else console.log('[ADV Shot] Próximo lead: nenhum — todos disparados');
+      console.log('[ADV Shot] ────────────────────────────────────────────');
     }else if(contacts.length>0){
       syncToSupabase(true);
     }
@@ -2050,7 +2077,7 @@ function _doOpenChat(i){
   }else if(contacts[i].xlsxRowIdx!=null){
     markXlsxRowSent(null,contacts[i].xlsxRowIdx);
   }
-  if(contacts[i].id)markLeadSentInSupabase(contacts[i].id);
+  if(contacts[i].id||contacts[i].phone)markLeadSentInSupabase(contacts[i].id,contacts[i].phone);
   saveStorage();renderDisp();renderHome();renderBanGuard();
   return true;
 }
@@ -2274,9 +2301,11 @@ function sendFu(i,lv){
   saveStorage();renderFU();renderCRM();
 }
 function setFuResp(i,lv,resp){
-  contacts[i].fuResp=resp;
-  if(resp==='pos')contacts[i].status='interessado';
-  else if(resp==='neg'){contacts[i].fuLevel=Math.min(lv+1,3);contacts[i].status='retornar';}
+  const c=contacts[i];if(!c)return;
+  c.fuResp=resp;
+  if(resp==='pos'){c.status='interessado';pushActionLog({acao:'FU positivo',nome:cleanNome(c.nome),motivo:'Interessado — FU nível '+lv});}
+  else if(resp==='neg'){c.fuLevel=Math.min(lv+1,3);c.status='retornar';pushActionLog({acao:'FU negativo',nome:cleanNome(c.nome),motivo:'Sem interesse — nível seguinte '+Math.min(lv+1,3)});}
+  else{pushActionLog({acao:'FU sem resposta',nome:cleanNome(c.nome),motivo:'Sem resposta — nível '+lv});}
   saveStorage();renderFU();renderCRM();
 }
 async function aiGenFu(i,lv){
@@ -2601,16 +2630,20 @@ function lvSelectNext(n){
     renderLocalLeadsTable();
     toast(added>0?'☑️ +'+added+' leads selecionados':'ℹ️ Nenhum novo pendente para selecionar',3000);
   }else{
-    // Supabase: busca mais do que já selecionado para pegar novos
-    const offset=lvSelected.size;
+    // Supabase: busca os próximos N pendentes APÓS os já disparados
+    // NÃO usa offset=lvSelected.size (zera no reload) —
+    // usa done=eq.false como filtro real de status
     const q={'source':'eq.planilha','done':'eq.false'};
     if(lvEstado)q['sheet_name']='eq.'+lvEstado;
     q['order']='created_at.asc';
-    // Busca offset + n para garantir que há leads novos além dos já selecionados
-    sbRestGet('contacts',q,[offset,offset+n-1]).then(({data})=>{
+    // Offset real: quantos já estão selecionados NA SESSÃO ATUAL (evita re-selecionar)
+    const sessionOffset=lvSelected.size;
+    sbRestGet('contacts',q,[sessionOffset,sessionOffset+n-1]).then(({data})=>{
       const newLeads=(data||[]).filter(l=>!lvSelected.has(l.id)).slice(0,n);
       newLeads.forEach(l=>lvSelected.add(l.id));
       setTxt('lvSelCount',lvSelected.size);
+      // Log diagnóstico
+      console.log('[ADV Shot] lvSelectNext: buscou',n,'pendentes | offset sessão:',sessionOffset,'| encontrou:',newLeads.length,'| IDs:',newLeads.slice(0,3).map(l=>l.phone));
       loadLeadsPage();
       toast(newLeads.length>0?'☑️ +'+newLeads.length+' leads selecionados':'ℹ️ Nenhum novo pendente',3000);
     });
@@ -2747,24 +2780,113 @@ function renderHome(){
   renderAlerts();
 }
 
+// ─── Log de ações ─────────────────────────────────────────
+const ACTION_LOG_KEY='advshot_action_log';
+function getActionLog(){try{return JSON.parse(localStorage.getItem(ACTION_LOG_KEY)||'[]');}catch(e){return[];}}
+function pushActionLog(entry){
+  const log=getActionLog();
+  log.unshift({...entry,ts:new Date().toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})});
+  localStorage.setItem(ACTION_LOG_KEY,JSON.stringify(log.slice(0,30)));
+}
+
+// ─── Pendências ───────────────────────────────────────────
+function buildPendencias(){
+  const todayStr=today();
+  const items=[];
+  contacts.forEach((c,i)=>{
+    if(['nao_quer','fechado','sem_viabilidade','errado'].includes(c.status))return;
+    if(c.done===false)return; // não disparado ainda
+    // P1 - Atraso
+    if(c.nextContact&&c.nextContact<todayStr){
+      const dias=getDaysSince(c.nextContact);
+      items.push({i,c,prio:1,label:'🔴 Atrasado',motivo:'Retorno previsto há '+dias+'d ('+c.nextContact+')',color:'#ef4444'});return;
+    }
+    // P2 - Para hoje
+    if(c.nextContact===todayStr){
+      items.push({i,c,prio:2,label:'🟡 Hoje',motivo:'Retorno agendado para hoje',color:'#f59e0b'});return;
+    }
+    // P3 - Etiqueta de alta prioridade sem próxima ação
+    const lnum=getLabelNum(c);
+    if(['04','05'].includes(lnum)&&!c.nextContact){
+      items.push({i,c,prio:3,label:'🟠 Proposta/Qualificado',motivo:'Etiqueta "'+esc(getLabelName(c))+'" sem próxima ação definida',color:'#f97316'});return;
+    }
+    // P4 - Respondeu mas sem ação
+    if(['respondeu','interessado'].includes(c.status)&&!c.nextContact){
+      items.push({i,c,prio:4,label:'🔵 Ação pendente',motivo:'Status "'+c.status+'" sem data de retorno',color:'#3b82f6'});return;
+    }
+    // P5 - FU pendente com etiqueta
+    if(c.wa_label&&['02','03'].includes(lnum)&&!c.nextContact){
+      items.push({i,c,prio:5,label:'⚪ FU pendente',motivo:'Etiqueta "'+esc(getLabelName(c))+'" aguardando follow-up',color:'#6b7280'});
+    }
+  });
+  return items.sort((a,b)=>a.prio-b.prio||getDaysSince(a.c.lastContact)-getDaysSince(b.c.lastContact));
+}
+
+function reanalisarLead(i){
+  const c=contacts[i];if(!c)return;
+  // Define próxima ação baseada no status/label
+  const lnum=getLabelNum(c);
+  const tomorrow=new Date();tomorrow.setDate(tomorrow.getDate()+1);
+  const tomorrowStr=tomorrow.toISOString().split('T')[0];
+  const parts=tomorrowStr.split('-');
+  c.nextContact=parts[2]+'/'+parts[1]+'/'+parts[0]; // dd/mm/yyyy
+  c.status=c.status==='pendente'?'retornar':c.status;
+  pushActionLog({acao:'Reanalisado',nome:cleanNome(c.nome),motivo:'Próxima ação definida para amanhã'});
+  saveStorage();renderAlerts();renderCRM();
+  toast('🔄 '+cleanNome(c.nome)+' — próxima ação: amanhã');
+}
+
+function limparResolvidos(){
+  const todayStr=today();
+  let count=0;
+  contacts.forEach(c=>{
+    if(c.nextContact&&c.nextContact<=todayStr&&c.status==='retornar'){
+      c.nextContact=null;count++;
+    }
+  });
+  if(!count){toast('ℹ️ Nenhuma pendência resolvida encontrada.');return;}
+  pushActionLog({acao:'Limpeza',nome:'—',motivo:count+' pendências limpas'});
+  saveStorage();renderAlerts();renderCRM();
+  toast('✅ '+count+' pendência(s) limpas.');
+}
+
 function renderAlerts(){
   const el=$id('homeAlerts');if(!el)return;
-  const todayStr=today();
-  const overdue=contacts.filter(c=>isOD(c));
-  const dueToday=contacts.filter(c=>c.nextContact===todayStr&&!['nao_quer','fechado','sem_viabilidade','errado'].includes(c.status));
+  const items=buildPendencias();
+  const log=getActionLog();
+  if(!items.length&&!log.length){el.innerHTML='';return;}
   let html='';
-  if(overdue.length){
-    html+='<div class="alert-card urgent" onclick="goTo(\'crm\');setF(\'overdue\',null)" style="cursor:pointer;">'
-      +'<div class="alert-title">⚠️ '+overdue.length+' lead'+(overdue.length>1?'s':'')+' em atraso — clique para ver</div>'
-      +overdue.slice(0,3).map(c=>'<div class="alert-item"><div class="alert-name">'+esc(cleanNome(c.nome))+' <span class="estado-badge">'+(c.estado||'?')+'</span></div><div class="alert-date">'+c.nextContact+'</div></div>').join('')
-      +(overdue.length>3?'<div style="font-size:.72rem;color:var(--red);margin-top:4px;">+ '+(overdue.length-3)+' outros</div>':'')
+  if(items.length){
+    html+='<div class="alert-card '+(items[0].prio<=2?'urgent':'')+'">'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">'
+      +'<div class="alert-title">📋 Fila de Pendências ('+items.length+')</div>'
+      +'<button onclick="limparResolvidos()" style="font-size:.68rem;background:#f5f5f5;border:1px solid #ddd;border-radius:6px;padding:3px 10px;cursor:pointer;color:#555;">🧹 Limpar resolvidos</button>'
+      +'</div>'
+      +items.slice(0,8).map(({i,c,label,motivo,color})=>{
+        const heat=getHeat(c);
+        return'<div style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-top:1px solid rgba(0,0,0,.06);">'
+          +'<div style="flex:1;min-width:0;">'
+          +'<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;">'
+          +'<span style="font-size:.7rem;font-weight:700;color:#1a1a1a;">'+esc(cleanNome(c.nome))+'</span>'
+          +'<span style="font-size:.62rem;background:'+color+'18;color:'+color+';border:1px solid '+color+'40;border-radius:4px;padding:1px 5px;">'+label+'</span>'
+          +'<span style="font-size:.62rem;color:'+heat.color+';">'+heat.icon+' '+heat.label+'</span>'
+          +'</div>'
+          +'<div style="font-size:.65rem;color:#888;margin-top:2px;">'+esc(motivo)+'</div>'
+          +'</div>'
+          +'<button onclick="reanalisarLead('+i+')" style="flex-shrink:0;font-size:.65rem;background:#e0e7ff;color:#4f46e5;border:none;border-radius:6px;padding:3px 8px;cursor:pointer;white-space:nowrap;">🔄 Reanalisar</button>'
+          +'</div>';
+      }).join('')
+      +(items.length>8?'<div style="font-size:.7rem;color:#888;padding-top:6px;text-align:center;">+ '+(items.length-8)+' outras pendências — veja o CRM</div>':'')
       +'</div>';
   }
-  if(dueToday.length){
-    html+='<div class="alert-card" onclick="goTo(\'crm\')" style="cursor:pointer;">'
-      +'<div class="alert-title">📅 '+dueToday.length+' para contatar hoje</div>'
-      +dueToday.slice(0,3).map(c=>'<div class="alert-item"><div class="alert-name">'+esc(cleanNome(c.nome))+' <span class="estado-badge">'+(c.estado||'?')+'</span></div>'+(c.service&&c.service!=='—'?'<span class="svc-badge">'+esc(c.service)+'</span>':'')+'</div>').join('')
-      +(dueToday.length>3?'<div style="font-size:.72rem;color:var(--orange);margin-top:4px;">+ '+(dueToday.length-3)+' outros</div>':'')
+  // Log de ações
+  if(log.length){
+    html+='<div class="alert-card" style="margin-top:0;">'
+      +'<div class="alert-title">🕐 Últimas ações</div>'
+      +log.slice(0,5).map(l=>'<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-top:1px solid rgba(0,0,0,.05);font-size:.7rem;">'
+        +'<div><span style="color:#555;font-weight:600;">'+esc(l.acao)+'</span>'+(l.nome&&l.nome!=='—'?' · <span style="color:#888;">'+esc(l.nome)+'</span>':'')+'<div style="color:#aaa;font-size:.65rem;">'+esc(l.motivo)+'</div></div>'
+        +'<span style="color:#bbb;font-size:.65rem;white-space:nowrap;margin-left:8px;">'+l.ts+'</span>'
+        +'</div>').join('')
       +'</div>';
   }
   el.innerHTML=html;
@@ -4167,15 +4289,20 @@ function buildSmartQueue(){
   toast('🎯 Fila inteligente montada: '+selected.length+' leads adicionados.',4000);
 }
 
-function markLeadSentInSupabase(id){
-  if(!sbClient||!id)return;
+function markLeadSentInSupabase(id,phone){
+  if(!sbClient)return;
   const sentAt=new Date().toLocaleString('pt-BR');
-  sbClient.from('contacts').update({
-    done:true,col_e:'ENVIADO',col_f:sentAt,
-    sent_at:sentAt,last_contact:today()
-  }).eq('id',id)
-  .then(({error})=>{if(error)console.warn('markLeadSentInSupabase:',error.message);})
-  .catch(e=>console.warn('markLeadSentInSupabase:',e));
+  const payload={done:true,col_e:'ENVIADO',col_f:sentAt,sent_at:sentAt,last_contact:today()};
+  // Atualiza por id (CRM) e por telefone (planilha) — garante que ambas as fontes ficam marcadas
+  const byId=id?sbClient.from('contacts').update(payload).eq('id',id):Promise.resolve({});
+  const byPhone=phone?sbClient.from('contacts').update(payload).eq('phone',phone):Promise.resolve({});
+  Promise.all([byId,byPhone])
+    .then(([r1,r2])=>{
+      const err=r1?.error||r2?.error;
+      if(err)console.warn('[ADV Shot] markLeadSent error:',err.message);
+      else console.log('[ADV Shot] ✅ Marcado enviado no Supabase — id:',id,'phone:',phone);
+    })
+    .catch(e=>console.warn('[ADV Shot] markLeadSent:',e));
 }
 
 </script>
