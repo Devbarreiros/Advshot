@@ -2873,7 +2873,10 @@ function renderAlerts(){
           +'</div>'
           +'<div style="font-size:.65rem;color:#888;margin-top:2px;">'+esc(motivo)+'</div>'
           +'</div>'
-          +'<button onclick="reanalisarLead('+i+')" style="flex-shrink:0;font-size:.65rem;background:#e0e7ff;color:#4f46e5;border:none;border-radius:6px;padding:3px 8px;cursor:pointer;white-space:nowrap;">🔄 Reanalisar</button>'
+          +'<div style="display:flex;gap:5px;flex-shrink:0;">'
+          +'<button onclick="openWa(\''+c.phone+'\')" style="font-size:.65rem;background:#25d366;color:#fff;border:none;border-radius:6px;padding:3px 8px;cursor:pointer;">💬</button>'
+          +'<button onclick="reanalisarLead('+i+')" style="font-size:.65rem;background:#e0e7ff;color:#4f46e5;border:none;border-radius:6px;padding:3px 8px;cursor:pointer;white-space:nowrap;">🔄</button>'
+          +'</div>'
           +'</div>';
       }).join('')
       +(items.length>8?'<div style="font-size:.7rem;color:#888;padding-top:6px;text-align:center;">+ '+(items.length-8)+' outras pendências — veja o CRM</div>':'')
