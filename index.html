@@ -92,6 +92,13 @@ input:focus,select:focus{border-color:var(--beige);}
 .chk.on{background:var(--taupe);border-color:var(--taupe);color:#fff;}
 .idx{font-size:.68rem;color:#ccc;min-width:14px;text-align:right;}
 .estado-badge{font-size:.62rem;font-weight:700;padding:1px 5px;border-radius:4px;background:#f0ebe2;color:var(--taupe);border:1px solid var(--beige);}
+/* TAGS NO DISPARADOR */
+.contact-tag-badge{display:inline-block;max-width:210px;margin-left:5px;padding:1px 7px;border-radius:99px;font-size:.61rem;font-weight:700;vertical-align:middle;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:#f5f3ef;color:var(--taupe);border:1px solid var(--gray);}
+.contact-tag-badge.tag-ht{background:#ecfdf5;color:#15803d;border-color:#86efac;}
+.contact-tag-badge.tag-descartado{background:#fef2f2;color:#b91c1c;border-color:#fca5a5;}
+.contact-tag-badge.tag-duplicado{background:#fff7ed;color:#c2410c;border-color:#fdba74;}
+.contact-tag-badge.tag-pj{background:#eff6ff;color:#1d4ed8;border-color:#93c5fd;}
+.disp-tag-count{font-size:.7rem;color:var(--taupe);white-space:nowrap;}
 .filter-row{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px;}
 .fb{padding:4px 11px;border-radius:99px;border:1.5px solid var(--gray);background:var(--white);font-size:.74rem;cursor:pointer;font-weight:600;color:#888;font-family:'Cormorant Garamond',serif;}
 .fb.active{border-color:var(--taupe);background:#faf6ef;color:var(--taupe);}
@@ -291,6 +298,11 @@ input:focus,select:focus{border-color:var(--beige);}
 [data-theme="dark"] .camp-stat{background:#13132a;color:#9090c0;}
 [data-theme="dark"] .svc-badge{background:#13132a;color:#9090c0;border-color:#2a2a4a;}
 [data-theme="dark"] .estado-badge{background:#13132a;color:#9090c0;border-color:#2a2a4a;}
+[data-theme="dark"] .contact-tag-badge{background:#13132a;color:#9090c0;border-color:#2a2a4a;}
+[data-theme="dark"] .contact-tag-badge.tag-ht{background:#052e16;color:#86efac;border-color:#166534;}
+[data-theme="dark"] .contact-tag-badge.tag-descartado{background:#450a0a;color:#fca5a5;border-color:#991b1b;}
+[data-theme="dark"] .contact-tag-badge.tag-duplicado{background:#431407;color:#fdba74;border-color:#9a3412;}
+[data-theme="dark"] .contact-tag-badge.tag-pj{background:#172554;color:#93c5fd;border-color:#1e40af;}
 [data-theme="dark"] .lvl-badge.l1{background:#1a1a0a;color:#c0a050;border-color:#4a4a1a;}
 [data-theme="dark"] .lvl-badge.l3{background:#090910;color:#9090c0;}
 /* Smooth transition */
@@ -515,6 +527,16 @@ body,input,select,textarea,.card,.modal,.ci,.crm-card,.stat-box,.fu-card,.tpl-ca
       <!-- AÇÕES NO TOPO -->
       <div class="list-top-actions">
         <button class="btn btn-red" style="font-size:.74rem;" onclick="clearDisp()">🗑 Limpar lista</button>
+        <select id="dispTagFilter" onchange="setDispTagFilter(this.value)" style="flex:1;min-width:180px;" title="Filtrar os contatos pela tag do Supabase">
+          <option value="all">🏷️ Todas as tags</option>
+          <option value="sem-descartados">✅ Todos, exceto descartados</option>
+          <option value="ht">💎 HT — High Ticket</option>
+          <option value="descartado">🚫 Descartados</option>
+          <option value="pj-se">🏢 PJ-SE / SE-PJ</option>
+          <option value="contato-duplo">👥 Contato Duplo</option>
+          <option value="sem-tag">⚪ Sem tag</option>
+        </select>
+        <span class="disp-tag-count" id="dispTagFilterCount"></span>
       </div>
       <!-- PROGRESSO -->
       <div class="prog-row">
@@ -1312,6 +1334,8 @@ function rowToContact(r){
     fuMsgIdx:r.fu_msg_idx||{1:-1,2:-1,3:-1},history:r.history||[],
     varIdx:r.var_idx||0,sentHour:r.sent_hour,xlsxRowIdx:r.xlsx_row_idx,
     fuResp:r.fu_resp,wa_label:r.wa_label||'',
+    tags:r.tags||'',sheet_name:r.sheet_name||'',categoria:r.categoria||'',
+    col_e:r.col_e||'',col_f:r.col_f||'',
     source:r.source||null   // ← preserva 'planilha', nunca colapsa para 'crm'
   };
 }
@@ -1650,6 +1674,64 @@ let cdDeadline=0;
 let batchMode=false, selectedLeads=new Set();
 let hideSent=true;
 let suspectOnly=false;
+let dispTagFilter='all';
+
+function normalizeContactTag(value){
+  return String(value||'')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g,'')
+    .replace(/\s+/g,' ')
+    .trim()
+    .toUpperCase();
+}
+
+function getContactTagFlags(value){
+  const tag=normalizeContactTag(value);
+  return{
+    normalized:tag,
+    isDiscarded:tag.includes('DESCARTADO')||tag.includes('DESCARTE'),
+    isDuplicate:tag.includes('CONTATO DUPLO')||tag.includes('CONTATO-DUPLO'),
+    isHighTicket:/(^|[^A-Z])HT([^A-Z]|$)/.test(tag)||tag.includes('HIGH TICKET'),
+    isPjSe:tag.includes('PJ-SE')||tag.includes('SE-PJ')
+  };
+}
+
+function contactMatchesTagFilter(contact){
+  if(dispTagFilter==='all')return true;
+  const flags=getContactTagFlags(contact.tags);
+  if(dispTagFilter==='sem-descartados')return !flags.isDiscarded;
+  if(dispTagFilter==='ht')return flags.isHighTicket;
+  if(dispTagFilter==='descartado')return flags.isDiscarded;
+  if(dispTagFilter==='pj-se')return flags.isPjSe;
+  if(dispTagFilter==='contato-duplo')return flags.isDuplicate;
+  if(dispTagFilter==='sem-tag')return !flags.normalized;
+  return true;
+}
+
+function getContactTagClass(value){
+  const flags=getContactTagFlags(value);
+  if(flags.isDiscarded)return'tag-descartado';
+  if(flags.isDuplicate)return'tag-duplicado';
+  if(flags.isHighTicket)return'tag-ht';
+  if(flags.isPjSe)return'tag-pj';
+  return'';
+}
+
+function setDispTagFilter(value){
+  dispTagFilter=value||'all';
+  renderDisp();
+  const labels={
+    'all':'Todas as tags',
+    'sem-descartados':'Todos, exceto descartados',
+    'ht':'HT — High Ticket',
+    'descartado':'Descartados',
+    'pj-se':'PJ-SE / SE-PJ',
+    'contato-duplo':'Contato Duplo',
+    'sem-tag':'Sem tag'
+  };
+  toast('🏷️ Filtro: '+(labels[dispTagFilter]||'Todas as tags'));
+}
+
 function toggleSuspectOnly(){
   suspectOnly=!suspectOnly;
   const btn=$id('btnSuspectOnly');
@@ -1856,8 +1938,12 @@ function _commitContacts(list){
 
 
 function nextP(){
-  // Auto mode skips blacklisted contacts automatically
-  return contacts.findIndex(c=>!c.done&&(isAuto?!isBlacklisted(c):true));
+  // Mantém as regras anteriores e, quando houver filtro, limita a fila à tag escolhida.
+  return contacts.findIndex(c=>
+    !c.done&&
+    contactMatchesTagFilter(c)&&
+    (isAuto?!isBlacklisted(c):true)
+  );
 }
 function openChat(i){
   const c=contacts[i];
@@ -2172,14 +2258,22 @@ function renderDisp(){
   const pf=$id('pFill');if(pf)pf.style.width=(contacts.length?done/contacts.length*100:0)+'%';
   const ni=isAuto?nextP():-1;
   const list=$id('contactList');if(!list)return;
+  let visibleCount=0;
   list.innerHTML=contacts.map((c,i)=>{
     if(hideSent&&c.done)return'';
     const suspect=isSuspectName(c.nome);
     if(suspectOnly&&!suspect)return'';
+    if(!contactMatchesTagFilter(c))return'';
+    visibleCount++;
+    const rawTags=String(c.tags||'').trim();
+    const tagClass=getContactTagClass(rawTags);
+    const tagBadge=rawTags
+      ?'<span class="contact-tag-badge '+tagClass+'" title="'+esc(rawTags)+'">'+esc(rawTags)+'</span>'
+      :'';
     return'<div class="ci '+(c.done?'done ':'')+( i===ni?'active-item':'')+'"'+(suspect?' style="background:rgba(239,68,68,0.08);border-left:3px solid #ef4444;"':'')+'>'
       +'<span class="idx">'+(i+1)+'</span>'
       +'<div class="ci-info">'
-        +'<div class="ci-name '+(c.done?'s':'')+'">'+(isSuspectName(c.nome)?'<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ef4444;margin-right:4px;vertical-align:middle;" title="Nome suspeito"></span>':'')+esc(c.nome)+' <span class="estado-badge">'+(c.estado||'?')+'</span>'+(i===ni?'<span style="font-size:.62rem;background:var(--taupe);color:#fff;padding:1px 5px;border-radius:99px;margin-left:4px;">próximo</span>':'')+'</div>'
+        +'<div class="ci-name '+(c.done?'s':'')+'">'+(isSuspectName(c.nome)?'<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ef4444;margin-right:4px;vertical-align:middle;" title="Nome suspeito"></span>':'')+esc(c.nome)+' <span class="estado-badge">'+(c.estado||'?')+'</span>'+tagBadge+(i===ni?'<span style="font-size:.62rem;background:var(--taupe);color:#fff;padding:1px 5px;border-radius:99px;margin-left:4px;">próximo</span>':'')+'</div>'
         +'<div class="ci-sub">💬 '+esc(getMsg(c.nome,c.varIdx))+'</div>'
       +'</div>'
       +'<button class="btn-open" '
@@ -2190,6 +2284,7 @@ function renderDisp(){
       +'<div class="chk '+(c.done?'on':'')+'" onclick="toggleDone('+i+')">'+(c.done?'✓':'')+'</div>'
     +'</div>';
   }).join('');
+  setTxt('dispTagFilterCount',visibleCount+' exibido'+(visibleCount===1?'':'s'));
 }
 
 // ═══ CRM ══════════════════════════════════════════════════
