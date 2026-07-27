@@ -2884,37 +2884,78 @@ function pushActionLog(entry){
   localStorage.setItem(ACTION_LOG_KEY,JSON.stringify(log.slice(0,30)));
 }
 
-// ─── Pendências ───────────────────────────────────────────
+// ─── FILA DE OPORTUNIDADES ────────────────────────────────
+// A Home mostra somente pessoas-chave confirmadas:
+// 05 = Proposta e 04 = Lead qualificado.
+// Etiqueta isolada não basta: o lead também precisa ter sinal de resposta
+// no CRM, evitando falsos positivos de contatos que nunca responderam.
+function normalizeQueueDate(value){
+  if(!value)return'';
+  const date=String(value).trim();
+  if(/^\d{4}-\d{2}-\d{2}$/.test(date))return date;
+  const br=date.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  return br?br[3]+'-'+br[2]+'-'+br[1]:'';
+}
+
+function isConfirmedOpportunity(c){
+  return ['respondeu','interessado','retornar'].includes(c.status)||c.fuResp==='pos';
+}
+
 function buildPendencias(){
   const todayStr=today();
   const items=[];
+
   contacts.forEach((c,i)=>{
-    if(['nao_quer','fechado','sem_viabilidade','errado'].includes(c.status))return;
-    if(c.done===false)return; // não disparado ainda
-    // P1 - Atraso
-    if(c.nextContact&&c.nextContact<todayStr){
-      const dias=getDaysSince(c.nextContact);
-      items.push({i,c,prio:1,label:'🔴 Atrasado',motivo:'Retorno previsto há '+dias+'d ('+c.nextContact+')',color:'#ef4444'});return;
-    }
-    // P2 - Para hoje
-    if(c.nextContact===todayStr){
-      items.push({i,c,prio:2,label:'🟡 Hoje',motivo:'Retorno agendado para hoje',color:'#f59e0b'});return;
-    }
-    // P3 - Etiqueta de alta prioridade sem próxima ação
+    if(c.done===false)return;
+    if(['pendente','nao_respondeu','nao_quer','fechado','sem_viabilidade','errado'].includes(c.status))return;
+
     const lnum=getLabelNum(c);
-    if(['04','05'].includes(lnum)&&!c.nextContact){
-      items.push({i,c,prio:3,label:'🟠 Proposta/Qualificado',motivo:'Etiqueta "'+esc(getLabelName(c))+'" sem próxima ação definida',color:'#f97316'});return;
+    if(!['04','05'].includes(lnum))return;
+    if(!isConfirmedOpportunity(c))return;
+
+    const isProposal=lnum==='05';
+    const typeLabel=isProposal?'🟠 Proposta':'🟣 Lead qualificado';
+    const typeName=isProposal?'Proposta':'Lead qualificado';
+    const nextDate=normalizeQueueDate(c.nextContact);
+
+    // Data futura: já existe próxima ação, então ainda não é pendência.
+    if(nextDate&&nextDate>todayStr)return;
+
+    if(nextDate&&nextDate<todayStr){
+      const dias=getDaysSince(nextDate);
+      items.push({
+        i,c,
+        prio:isProposal?1:2,
+        label:typeLabel,
+        motivo:typeName+' com retorno atrasado há '+dias+'d ('+c.nextContact+')',
+        color:'#ef4444'
+      });
+      return;
     }
-    // P4 - Respondeu mas sem ação
-    if(['respondeu','interessado'].includes(c.status)&&!c.nextContact){
-      items.push({i,c,prio:4,label:'🔵 Ação pendente',motivo:'Status "'+c.status+'" sem data de retorno',color:'#3b82f6'});return;
+
+    if(nextDate===todayStr){
+      items.push({
+        i,c,
+        prio:isProposal?3:4,
+        label:typeLabel,
+        motivo:typeName+' com retorno marcado para hoje',
+        color:'#f59e0b'
+      });
+      return;
     }
-    // P5 - FU pendente com etiqueta
-    if(c.wa_label&&['02','03'].includes(lnum)&&!c.nextContact){
-      items.push({i,c,prio:5,label:'⚪ FU pendente',motivo:'Etiqueta "'+esc(getLabelName(c))+'" aguardando follow-up',color:'#6b7280'});
-    }
+
+    items.push({
+      i,c,
+      prio:isProposal?5:6,
+      label:typeLabel,
+      motivo:typeName+' confirmado sem próxima ação definida',
+      color:isProposal?'#f97316':'#7c3aed'
+    });
   });
-  return items.sort((a,b)=>a.prio-b.prio||getDaysSince(a.c.lastContact)-getDaysSince(b.c.lastContact));
+
+  return items.sort((a,b)=>
+    a.prio-b.prio||getDaysSince(a.c.lastContact)-getDaysSince(b.c.lastContact)
+  );
 }
 
 function reanalisarLead(i){
@@ -2924,7 +2965,7 @@ function reanalisarLead(i){
   const tomorrow=new Date();tomorrow.setDate(tomorrow.getDate()+1);
   const tomorrowStr=tomorrow.toISOString().split('T')[0];
   const parts=tomorrowStr.split('-');
-  c.nextContact=parts[2]+'/'+parts[1]+'/'+parts[0]; // dd/mm/yyyy
+  c.nextContact=tomorrowStr; // formato ISO aceito pelo input date
   c.status=c.status==='pendente'?'retornar':c.status;
   pushActionLog({acao:'Reanalisado',nome:cleanNome(c.nome),motivo:'Próxima ação definida para amanhã'});
   saveStorage();renderAlerts();renderCRM();
@@ -2954,7 +2995,7 @@ function renderAlerts(){
   if(items.length){
     html+='<div class="alert-card '+(items[0].prio<=2?'urgent':'')+'">'
       +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">'
-      +'<div class="alert-title">📋 Fila de Pendências ('+items.length+')</div>'
+      +'<div class="alert-title">🎯 Fila de Oportunidades ('+items.length+')</div>'
       +'<button onclick="limparResolvidos()" style="font-size:.68rem;background:#f5f5f5;border:1px solid #ddd;border-radius:6px;padding:3px 10px;cursor:pointer;color:#555;">🧹 Limpar resolvidos</button>'
       +'</div>'
       +items.slice(0,8).map(({i,c,label,motivo,color})=>{
@@ -2974,7 +3015,7 @@ function renderAlerts(){
           +'</div>'
           +'</div>';
       }).join('')
-      +(items.length>8?'<div style="font-size:.7rem;color:#888;padding-top:6px;text-align:center;">+ '+(items.length-8)+' outras pendências — veja o CRM</div>':'')
+      +(items.length>8?'<div style="font-size:.7rem;color:#888;padding-top:6px;text-align:center;">+ '+(items.length-8)+' outras oportunidades — veja o CRM</div>':'')
       +'</div>';
   }
   // Log de ações
