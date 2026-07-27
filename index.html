@@ -590,6 +590,7 @@ body,input,select,textarea,.card,.modal,.ci,.crm-card,.stat-box,.fu-card,.tpl-ca
       <button class="btn btn-ghost" style="width:100%;font-size:.78rem;margin-bottom:4px;" id="btnHideSent" onclick="toggleHideSent()">👁 Mostrar enviados</button>
       <button class="btn btn-ghost" style="width:100%;font-size:.78rem;margin-bottom:8px;" id="btnSuspectOnly" onclick="toggleSuspectOnly()">🔴 Irregulares</button>
       <div id="contactList"></div>
+      <div id="dispListFooter"></div>
     </div>
   </div>
 </div>
@@ -1132,6 +1133,14 @@ let sbSyncing=false;
 let sbLastSync=null;
 let currentUser=null;
 
+// Sincronização leve: salva apenas os contatos alterados no Supabase.
+// O conjunto completo continua na memória e no banco, sem reenviar 11 mil linhas a cada clique.
+const sbDirtyContactIds=new Set();
+let sbDirtyAll=false;
+let sbDirtyMeta=false;
+let localSaveTimer=null;
+let cloudSaveTimer=null;
+
 function initSupabase(){
   try{
     if(typeof supabase==='undefined'){console.warn('Supabase library not loaded');return;}
@@ -1419,39 +1428,106 @@ async function loadFromSupabase(){
   }
 }
 
+function queueDirtyChange(change){
+  if(change==='all'){
+    sbDirtyAll=true;
+    sbDirtyMeta=true;
+    return;
+  }
+  if(change==='meta'){
+    sbDirtyMeta=true;
+    return;
+  }
+  if(Array.isArray(change)){
+    change.forEach(queueDirtyChange);
+    return;
+  }
+  if(typeof change==='number'){
+    const contact=contacts[change];
+    if(contact?.id)sbDirtyContactIds.add(contact.id);
+    return;
+  }
+  if(change&&typeof change==='object'&&change.id){
+    sbDirtyContactIds.add(change.id);
+  }
+}
+
+function yieldToBrowser(){
+  return new Promise(resolve=>setTimeout(resolve,0));
+}
+
+async function upsertRowsInChunks(table,rows,chunkSize){
+  for(let start=0;start<rows.length;start+=chunkSize){
+    const chunk=rows.slice(start,start+chunkSize);
+    const{error}=await sbClient.from(table).upsert(chunk,{onConflict:'id'});
+    if(error)throw error;
+    await yieldToBrowser();
+  }
+}
+
 async function syncToSupabase(force){
   if(!sbClient||sbSyncing)return;
-  if(!contacts.length&&!campaigns.length&&!webhooks.length)return;
+
+  if(force){
+    sbDirtyAll=true;
+    sbDirtyMeta=true;
+  }
+
+  const shouldSyncContacts=sbDirtyAll||sbDirtyContactIds.size>0;
+  const shouldSyncMeta=sbDirtyMeta;
+  if(!shouldSyncContacts&&!shouldSyncMeta)return;
+
   sbSyncing=true;
   setSyncDot('#fbbf24','Sincronizando...');
+
+  const syncAll=sbDirtyAll;
+  const idsToSync=new Set(sbDirtyContactIds);
+  const syncMeta=sbDirtyMeta;
+
   try{
-    if(contacts.length){
-      const rows=contacts.map(contactToRow);
-      const{error:ce}=await sbClient.from('contacts').upsert(rows,{onConflict:'id'});
-      if(ce)console.warn('Contacts sync:',ce.message||ce);
+    if(shouldSyncContacts){
+      const rows=syncAll
+        ?contacts.map(contactToRow)
+        :contacts.filter(c=>idsToSync.has(c.id)).map(contactToRow);
+
+      if(rows.length)await upsertRowsInChunks('contacts',rows,250);
     }
-    if(campaigns.length){
-      const{error:campe}=await sbClient.from('campaigns').upsert(campaigns,{onConflict:'id'});
-      if(campe)console.warn('Campaigns sync:',campe.message||campe);
+
+    if(syncMeta&&campaigns.length){
+      await upsertRowsInChunks('campaigns',campaigns,100);
     }
-    if(webhooks.length){
-      const{error:whe}=await sbClient.from('webhooks').upsert(webhooks,{onConflict:'id'});
-      if(whe)console.warn('Webhooks sync:',whe.message||whe);
+    if(syncMeta&&webhooks.length){
+      await upsertRowsInChunks('webhooks',webhooks,100);
     }
+
+    if(syncAll){
+      sbDirtyAll=false;
+      sbDirtyContactIds.clear();
+    }else{
+      idsToSync.forEach(id=>sbDirtyContactIds.delete(id));
+    }
+    if(syncMeta)sbDirtyMeta=false;
+
     sbLastSync=new Date().toLocaleTimeString('pt-BR');
     setSyncDot('#4ade80','Sincronizado');
-    setSyncStatus('✅ Supabase sincronizado','Último sync: '+sbLastSync+' · '+contacts.length+' leads');
+    const syncedLabel=syncAll?contacts.length:(idsToSync.size||0);
+    setSyncStatus('✅ Supabase sincronizado','Último sync: '+sbLastSync+' · '+syncedLabel+' registro(s) atualizado(s)');
   }catch(e){
-    // DataCloneError e outros erros internos do Supabase — ignora silenciosamente
-    const msg=e.message||'';
+    const msg=e.message||String(e)||'';
     if(msg.includes('DataClone')||msg.includes('postMessage')){
       setSyncDot('#fbbf24','Sync pendente');
     }else{
       console.warn('Sync error:',msg);
       setSyncDot('#f87171','Erro ao sincronizar');
     }
+  }finally{
+    sbSyncing=false;
+    // Se houve outra alteração enquanto sincronizava, agenda a próxima rodada.
+    if(sbDirtyAll||sbDirtyContactIds.size||sbDirtyMeta){
+      clearTimeout(cloudSaveTimer);
+      cloudSaveTimer=setTimeout(()=>syncToSupabase(false),1800);
+    }
   }
-  sbSyncing=false;
 }
 
 async function syncNow(){
@@ -1459,8 +1535,8 @@ async function syncNow(){
   toast('✅ Sincronizado com Supabase!');
 }
 
-// Auto-sync a cada 3 minutos
-setInterval(()=>syncToSupabase(),3*60*1000);
+// Apenas confirma alterações pendentes; não reenvia os 11 mil contatos periodicamente.
+setInterval(()=>syncToSupabase(false),2*60*1000);
 
 // ═══ TEMA ESCURO / CLARO ══════════════════════════════════
 function toggleTheme(){
@@ -1676,6 +1752,11 @@ let hideSent=true;
 let suspectOnly=false;
 let dispTagFilter='all';
 
+// O array mantém todos os leads, mas o DOM renderiza somente lotes pequenos.
+// Isso evita travar o navegador com milhares de cards ao mesmo tempo.
+const DISP_RENDER_BATCH=60;
+let dispRenderLimit=DISP_RENDER_BATCH;
+
 function normalizeContactTag(value){
   return String(value||'')
     .normalize('NFD')
@@ -1717,9 +1798,27 @@ function getContactTagClass(value){
   return'';
 }
 
+function resetDispRenderLimit(){
+  dispRenderLimit=DISP_RENDER_BATCH;
+}
+
+function renderDispSoon(){
+  const list=$id('contactList');
+  if(list)list.innerHTML='<div class="empty" style="padding:16px;">🔄 Filtrando contatos...</div>';
+  const footer=$id('dispListFooter');
+  if(footer)footer.innerHTML='';
+  requestAnimationFrame(renderDisp);
+}
+
+function loadMoreDisp(){
+  dispRenderLimit+=DISP_RENDER_BATCH;
+  renderDisp();
+}
+
 function setDispTagFilter(value){
   dispTagFilter=value||'all';
-  renderDisp();
+  resetDispRenderLimit();
+  renderDispSoon();
   const labels={
     'all':'Todas as tags',
     'sem-descartados':'Todos, exceto descartados',
@@ -1734,9 +1833,10 @@ function setDispTagFilter(value){
 
 function toggleSuspectOnly(){
   suspectOnly=!suspectOnly;
+  resetDispRenderLimit();
   const btn=$id('btnSuspectOnly');
   if(btn)btn.textContent=suspectOnly?'🔴 Mostrar todos':'🔴 Irregulares';
-  renderDisp();
+  renderDispSoon();
 }
 
 // ═══ INIT ═════════════════════════════════════════════════
@@ -1827,13 +1927,13 @@ function populateCampSelect(){
 function createCamp(){
   const name=$id('campName').value.trim();if(!name)return;
   campaigns.push({id:'c'+Date.now(),name,color:$id('campColor').value,createdAt:today()});
-  $id('campName').value='';saveStorage();populateCampSelect();renderCamps();
+  $id('campName').value='';saveStorage('meta');populateCampSelect();renderCamps();
 }
 function deleteCamp(id){
   if(!confirm('Remover campanha?'))return;
   campaigns=campaigns.filter(c=>c.id!==id);
   contacts.forEach(c=>{if(c.campaign===id)c.campaign='default';});
-  saveStorage();populateCampSelect();renderCamps();
+  saveStorage('all');populateCampSelect();renderCamps();
 }
 
 // ═══ CARREGAR CONTATOS ════════════════════════════════════
@@ -1929,7 +2029,7 @@ function addAllAnyway(){
 function _commitContacts(list){
   if(!list.length){toast('⚠️ Nenhum contato novo para adicionar.');return;}
   contacts=[...contacts,...list];
-  saveStorage();
+  saveStorage(list);
   setDisplay('listSection','block');
   renderDisp();renderHome();
   const st={};list.forEach(c=>{st[c.estado]=(st[c.estado]||0)+1;});
@@ -1991,7 +2091,7 @@ function enviarRetomada(phone,idx,nome){
 function closeRetomada(){
   const m=$id('retomadaModal');if(m)m.classList.remove('open');
 }
-function toggleDone(i){contacts[i].done=!contacts[i].done;saveStorage();renderDisp();}
+function toggleDone(i){contacts[i].done=!contacts[i].done;saveStorage(i);renderDisp();}
 
 // ═══ PICKER DE MENSAGEM ═══════════════════════════════════
 let _pickerIdx = -1; // contato aguardando seleção
@@ -2040,7 +2140,7 @@ function sendPickedMsg(varIdx){
   contacts[i].done=true;contacts[i].sentAt=new Date().toLocaleString('pt-BR');
   contacts[i].lastContact=today();contacts[i].sentHour=nowHour();
   addHistory(i,msg,'disparo');incrementDailySent();recordSendEvent(contacts[i]);
-  saveStorage();renderDisp();renderHome();
+  saveStorage(i);renderDisp();renderHome();
   if(isAuto)scheduleNext();
 }
 
@@ -2055,9 +2155,10 @@ function clearDisp(){
 }
 function toggleHideSent(){
   hideSent=!hideSent;
+  resetDispRenderLimit();
   const btn=$id('btnHideSent');
   if(btn)btn.textContent=hideSent?'👁 Mostrar enviados':'🙈 Ocultar enviados';
-  renderDisp();
+  renderDispSoon();
 }
 
 // ═══ MODO AUTOMÁTICO ══════════════════════════════════════
@@ -2164,7 +2265,7 @@ function _doOpenChat(i){
     markXlsxRowSent(null,contacts[i].xlsxRowIdx);
   }
   if(contacts[i].id||contacts[i].phone)markLeadSentInSupabase(contacts[i].id,contacts[i].phone);
-  saveStorage();renderDisp();renderHome();renderBanGuard();
+  saveStorage(i);renderDisp();renderHome();renderBanGuard();
   return true;
 }
 
@@ -2253,47 +2354,95 @@ function syncAutoButtons(){
 
 // ═══ RENDER DISPARADOR ════════════════════════════════════
 function renderDisp(){
-  const done=contacts.filter(c=>c.done).length;
-  setTxt('tot',contacts.length);setTxt('sent',done);setTxt('left',contacts.length-done);
-  const pf=$id('pFill');if(pf)pf.style.width=(contacts.length?done/contacts.length*100:0)+'%';
-  const ni=isAuto?nextP():-1;
-  const list=$id('contactList');if(!list)return;
-  let visibleCount=0;
-  list.innerHTML=contacts.map((c,i)=>{
-    if(hideSent&&c.done)return'';
+  const list=$id('contactList');
+  if(!list)return;
+
+  let done=0;
+  const visibleIndexes=[];
+
+  // Uma única passagem pelos 11 mil leads: conta, filtra e guarda somente os índices.
+  // Os cards só são criados para o lote visível abaixo.
+  for(let i=0;i<contacts.length;i++){
+    const c=contacts[i];
+    if(c.done)done++;
+    if(hideSent&&c.done)continue;
     const suspect=isSuspectName(c.nome);
-    if(suspectOnly&&!suspect)return'';
-    if(!contactMatchesTagFilter(c))return'';
-    visibleCount++;
+    if(suspectOnly&&!suspect)continue;
+    if(!contactMatchesTagFilter(c))continue;
+    visibleIndexes.push(i);
+  }
+
+  setTxt('tot',contacts.length);
+  setTxt('sent',done);
+  setTxt('left',contacts.length-done);
+  const pf=$id('pFill');
+  if(pf)pf.style.width=(contacts.length?done/contacts.length*100:0)+'%';
+
+  const ni=isAuto?nextP():-1;
+  const totalVisible=visibleIndexes.length;
+  const renderCount=Math.min(totalVisible,dispRenderLimit);
+  const html=[];
+
+  for(let pos=0;pos<renderCount;pos++){
+    const i=visibleIndexes[pos];
+    const c=contacts[i];
+    const suspect=isSuspectName(c.nome);
     const rawTags=String(c.tags||'').trim();
     const tagClass=getContactTagClass(rawTags);
     const tagBadge=rawTags
       ?'<span class="contact-tag-badge '+tagClass+'" title="'+esc(rawTags)+'">'+esc(rawTags)+'</span>'
       :'';
-    return'<div class="ci '+(c.done?'done ':'')+( i===ni?'active-item':'')+'"'+(suspect?' style="background:rgba(239,68,68,0.08);border-left:3px solid #ef4444;"':'')+'>'
+
+    html.push('<div class="ci '+(c.done?'done ':'')+(i===ni?'active-item':'')+'"'
+      +(suspect?' style="background:rgba(239,68,68,0.08);border-left:3px solid #ef4444;"':'')+'>'
       +'<span class="idx">'+(i+1)+'</span>'
       +'<div class="ci-info">'
-        +'<div class="ci-name '+(c.done?'s':'')+'">'+(isSuspectName(c.nome)?'<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ef4444;margin-right:4px;vertical-align:middle;" title="Nome suspeito"></span>':'')+esc(c.nome)+' <span class="estado-badge">'+(c.estado||'?')+'</span>'+tagBadge+(i===ni?'<span style="font-size:.62rem;background:var(--taupe);color:#fff;padding:1px 5px;border-radius:99px;margin-left:4px;">próximo</span>':'')+'</div>'
+        +'<div class="ci-name '+(c.done?'s':'')+'">'
+        +(suspect?'<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ef4444;margin-right:4px;vertical-align:middle;" title="Nome suspeito"></span>':'')
+        +esc(c.nome)+' <span class="estado-badge">'+(c.estado||'?')+'</span>'+tagBadge
+        +(i===ni?'<span style="font-size:.62rem;background:var(--taupe);color:#fff;padding:1px 5px;border-radius:99px;margin-left:4px;">próximo</span>':'')
+        +'</div>'
         +'<div class="ci-sub">💬 '+esc(getMsg(c.nome,c.varIdx))+'</div>'
       +'</div>'
       +'<button class="btn-open" '
       +(c.done
-        ? 'onclick="showRetomadaModal('+i+')" style="background:#4f46e5;" title="Mensagem de retomada"'
-        : 'onclick="openChat('+i+')"')
+        ?'onclick="showRetomadaModal('+i+')" style="background:#4f46e5;" title="Mensagem de retomada"'
+        :'onclick="openChat('+i+')"')
       +'>'+(c.done?'🔁':'▶')+'</button>'
       +'<div class="chk '+(c.done?'on':'')+'" onclick="toggleDone('+i+')">'+(c.done?'✓':'')+'</div>'
-    +'</div>';
-  }).join('');
-  setTxt('dispTagFilterCount',visibleCount+' exibido'+(visibleCount===1?'':'s'));
+      +'</div>');
+  }
+
+  list.innerHTML=html.join('')||(totalVisible===0
+    ?'<div class="empty">Nenhum contato neste filtro</div>'
+    :'');
+
+  const countText=renderCount<totalVisible
+    ?renderCount+' de '+totalVisible+' exibidos'
+    :totalVisible+' exibido'+(totalVisible===1?'':'s');
+  setTxt('dispTagFilterCount',countText);
+
+  const footer=$id('dispListFooter');
+  if(footer){
+    const remaining=totalVisible-renderCount;
+    footer.innerHTML=remaining>0
+      ?'<div style="padding-top:10px;text-align:center;">'
+        +'<button class="btn btn-ghost" style="min-width:220px;" onclick="loadMoreDisp()">'
+        +'➕ Carregar mais '+Math.min(DISP_RENDER_BATCH,remaining)
+        +' <span style="opacity:.65;">('+remaining+' restantes)</span>'
+        +'</button></div>'
+      :'';
+  }
 }
+
 
 // ═══ CRM ══════════════════════════════════════════════════
 function isOD(c){return c.nextContact&&c.nextContact<today()&&!['nao_quer','fechado','sem_viabilidade','errado'].includes(c.status);}
 function setF(f,e){crmF=f;document.querySelectorAll('#sub-cont .filter-row .fb').forEach(el=>el.classList.remove('active'));if(e&&e.target)e.target.classList.add('active');renderCRM();}
-function setStatus(i,v){contacts[i].status=v;saveStorage();renderCRM();renderHome();}
-function setLC(i,v){contacts[i].lastContact=v;saveStorage();}
-function setNC(i,v){contacts[i].nextContact=v;saveStorage();renderCRM();}
-function setNotes(i,v){contacts[i].notes=v;saveStorage();}
+function setStatus(i,v){contacts[i].status=v;saveStorage(i);renderCRM();renderHome();}
+function setLC(i,v){contacts[i].lastContact=v;saveStorage(i);}
+function setNC(i,v){contacts[i].nextContact=v;saveStorage(i);renderCRM();}
+function setNotes(i,v){contacts[i].notes=v;saveStorage(i);}
 function openWa(phone){window.open('https://wa.me/'+phone,'_blank');}
 function onSearchChange(){crmSearch=($id('crmSearch').value||'').toLowerCase();renderCRM();}
 function onSortChange(){crmSortMode=$id('crmSort').value;renderCRM();}
@@ -2313,7 +2462,7 @@ function saveEdit(i){
   const phone=(($id('edit-phone-'+i)||{}).value||'').replace(/\D/g,'');
   if(nome.trim())contacts[i].nome=nome.trim();
   if(phone){contacts[i].phone=phone;contacts[i].estado=getEstado(phone);}
-  saveStorage();renderCRM();toast('✅ Lead atualizado!');
+  saveStorage(i);renderCRM();toast('✅ Lead atualizado!');
 }
 function renderCRM(){
   let od=0,int=0,ret=0,no=0;
@@ -2382,7 +2531,7 @@ function renderFuEstadoFilter(list){
 function regenFu(i,lv){
   const c=contacts[i],pool=FU[lv],used=c.fuMsgIdx[lv];
   const idx=(used+1+Math.floor(Math.random()*(pool.length-1)))%pool.length;
-  contacts[i].fuMsgIdx[lv]=idx;saveStorage();
+  contacts[i].fuMsgIdx[lv]=idx;saveStorage(i);
   const el=$id('fum-'+i+'-'+lv);if(el)el.textContent=applyVars(pool[idx],cleanNome(c.nome));
 }
 function sendFu(i,lv){
@@ -2393,7 +2542,7 @@ function sendFu(i,lv){
   contacts[i].lastContact=today();contacts[i].fuLevel=lv;
   addHistory(i,msg,'followup');
   incrementDailySent();
-  saveStorage();renderFU();renderCRM();
+  saveStorage(i);renderFU();renderCRM();
 }
 function setFuResp(i,lv,resp){
   const c=contacts[i];if(!c)return;
@@ -2401,7 +2550,7 @@ function setFuResp(i,lv,resp){
   if(resp==='pos'){c.status='interessado';pushActionLog({acao:'FU positivo',nome:cleanNome(c.nome),motivo:'Interessado — FU nível '+lv});}
   else if(resp==='neg'){c.fuLevel=Math.min(lv+1,3);c.status='retornar';pushActionLog({acao:'FU negativo',nome:cleanNome(c.nome),motivo:'Sem interesse — nível seguinte '+Math.min(lv+1,3)});}
   else{pushActionLog({acao:'FU sem resposta',nome:cleanNome(c.nome),motivo:'Sem resposta — nível '+lv});}
-  saveStorage();renderFU();renderCRM();
+  saveStorage(i);renderFU();renderCRM();
 }
 async function aiGenFu(i,lv){
   const c=contacts[i],el=$id('fum-'+i+'-'+lv);if(!el)return;
@@ -2822,7 +2971,7 @@ function applyBatchStatus(){
   const v=$id('batchStatusSel').value;
   if(!v||!selectedLeads.size){toast('⚠️ Selecione leads e um status.');return;}
   selectedLeads.forEach(i=>{if(contacts[i])contacts[i].status=v;});
-  saveStorage();
+  saveStorage([...selectedLeads]);
   toast('✅ Status atualizado em '+selectedLeads.size+' lead(s)!');
   toggleBatchMode();
   renderCRM();renderHome();
@@ -2832,16 +2981,18 @@ function markRestAsNotResponded(){
   const somenteHoje=crmF==='hoje';
   const eligibleStatuses=['pendente','nao_respondeu'];
   let count=0;
+  const changedIndexes=[];
   contacts.forEach((c,i)=>{
     if(!c.done)return;
     if(selectedLeads.has(i))return; // selecionados = responderam
     if(somenteHoje&&c.lastContact!==today())return; // só de hoje se filtro ativo
     if(!eligibleStatuses.includes(c.status||'pendente'))return;
     c.status='nao_respondeu';
+    changedIndexes.push(i);
     count++;
   });
   if(!count){toast('ℹ️ Nenhum lead elegível encontrado.');return;}
-  saveStorage();
+  saveStorage(changedIndexes);
   toast('🔇 '+count+' leads marcados como "Não respondeu"'+(somenteHoje?' (disparados hoje)':'')+'.',4000);
   toggleBatchMode();
   renderCRM();renderHome();
@@ -2968,21 +3119,22 @@ function reanalisarLead(i){
   c.nextContact=tomorrowStr; // formato ISO aceito pelo input date
   c.status=c.status==='pendente'?'retornar':c.status;
   pushActionLog({acao:'Reanalisado',nome:cleanNome(c.nome),motivo:'Próxima ação definida para amanhã'});
-  saveStorage();renderAlerts();renderCRM();
+  saveStorage(i);renderAlerts();renderCRM();
   toast('🔄 '+cleanNome(c.nome)+' — próxima ação: amanhã');
 }
 
 function limparResolvidos(){
   const todayStr=today();
   let count=0;
-  contacts.forEach(c=>{
+  const changedIndexes=[];
+  contacts.forEach((c,i)=>{
     if(c.nextContact&&c.nextContact<=todayStr&&c.status==='retornar'){
-      c.nextContact=null;count++;
+      c.nextContact=null;changedIndexes.push(i);count++;
     }
   });
   if(!count){toast('ℹ️ Nenhuma pendência resolvida encontrada.');return;}
   pushActionLog({acao:'Limpeza',nome:'—',motivo:count+' pendências limpas'});
-  saveStorage();renderAlerts();renderCRM();
+  saveStorage(changedIndexes);renderAlerts();renderCRM();
   toast('✅ '+count+' pendência(s) limpas.');
 }
 
@@ -3032,7 +3184,7 @@ function renderAlerts(){
 }
 
 // ═══ SERVIÇO ══════════════════════════════════════════════
-function setService(i,v){contacts[i].service=v;saveStorage();}
+function setService(i,v){contacts[i].service=v;saveStorage(i);}
 
 // ═══ HISTÓRICO ════════════════════════════════════════════
 function addHistory(i,msg,type){
@@ -3450,6 +3602,7 @@ function lvClearSel(){
 async function lvSendToDisp(){
   if(!lvSelected.size){toast('⚠️ Selecione pelo menos um lead.');return;}
   const campId=$id('dispCamp')?.value||'default';
+  const initialContactsLength=contacts.length;
   const existingPhones=new Set(contacts.map(c=>c.phone.replace(/\D/g,'')));
   let added=0,dupes=0;
 
@@ -3485,7 +3638,7 @@ async function lvSendToDisp(){
     });
   }
 
-  saveStorage();setDisplay('listSection','block');renderDisp();renderHome();
+  saveStorage(contacts.slice(initialContactsLength));setDisplay('listSection','block');renderDisp();renderHome();
   goTo('disp');
   toast('✅ '+added+' leads no Disparador!'+(dupes?' · '+dupes+' já existiam':''));
   lvSelected.clear();setTxt('lvSelCount',0);
@@ -3812,7 +3965,7 @@ function addWebhook(){
   if(!name||!url){toast('⚠️ Preencha o nome e a URL.');return;}
   if(!url.startsWith('http')){toast('⚠️ URL inválida.');return;}
   webhooks.push({id:'w'+Date.now(),name,url});
-  saveStorage();
+  saveStorage('meta');
   const ni=$id('whName'),ui=$id('whUrl');
   if(ni)ni.value='';if(ui)ui.value='';
   renderWebhooks();
@@ -3822,7 +3975,7 @@ function addWebhook(){
 function removeWebhook(i){
   if(!confirm('Remover conexão "'+webhooks[i]?.name+'"?'))return;
   webhooks.splice(i,1);
-  saveStorage();renderWebhooks();
+  saveStorage('meta');renderWebhooks();
   renderPullSelect();
 }
 
@@ -3851,7 +4004,7 @@ function confirmSync(){
   if(!url){toast('⚠️ Cole a URL do Apps Script primeiro.');return;}
   if(!webhooks.find(w=>w.url===url)){
     webhooks.push({id:'w'+Date.now(),name:'CRM Principal',url});
-    saveStorage();renderWebhooks();renderPullSelect();
+    saveStorage('meta');renderWebhooks();renderPullSelect();
   }
   sendToWebhookUrl(url);
 }
@@ -3900,7 +4053,7 @@ async function pullFromSheet(){
       contacts.push(mkC(phone,row.nome||phone,i,'default'));
       added++;
     });
-    saveStorage();renderAll();
+    saveStorage('all');renderAll();
     if(st)st.textContent='✅ '+added+' leads importados de "'+w.name+'".';
     toast('✅ '+added+' leads importados!');
   }catch(e){
@@ -3936,9 +4089,33 @@ async function loadLeadsFromSheet(){
 }
 
 
-function saveStorage(){
-  try{localStorage.setItem('advshot2',JSON.stringify({contacts,campaigns,webhooks}));}catch(e){}
-  setTimeout(()=>syncToSupabase(),500);
+function persistLocalSnapshot(){
+  const write=()=>{
+    try{
+      localStorage.setItem('advshot2',JSON.stringify({contacts,campaigns,webhooks}));
+    }catch(e){
+      console.warn('Cache local não pôde ser atualizado:',e?.message||e);
+    }
+  };
+
+  // Executa fora do clique/filtro para não congelar a interface.
+  if('requestIdleCallback'in window){
+    requestIdleCallback(write,{timeout:2500});
+  }else{
+    setTimeout(write,0);
+  }
+}
+
+function saveStorage(change){
+  queueDirtyChange(change);
+
+  clearTimeout(localSaveTimer);
+  localSaveTimer=setTimeout(persistLocalSnapshot,1200);
+
+  if(change!==undefined){
+    clearTimeout(cloudSaveTimer);
+    cloudSaveTimer=setTimeout(()=>syncToSupabase(false),1800);
+  }
 }
 function loadStorage(){
   try{
@@ -3957,7 +4134,7 @@ function loadStorage(){
   }catch(e){}
 }
 function exportData(){const b=new Blob([JSON.stringify({contacts,campaigns},null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='advshot-backup.json';a.click();}
-function importData(e){const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>{try{const d=JSON.parse(ev.target.result);contacts=d.contacts||[];campaigns=d.campaigns||[];contacts.forEach(c=>{if(!c.estado)c.estado=getEstado(c.phone);if(!c.fuMsgIdx)c.fuMsgIdx={1:-1,2:-1,3:-1};});saveStorage();populateCampSelect();renderAll();toast('✅ '+contacts.length+' contatos importados!');}catch(err){alert('Arquivo inválido.');}};r.readAsText(f);}
+function importData(e){const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>{try{const d=JSON.parse(ev.target.result);contacts=d.contacts||[];campaigns=d.campaigns||[];contacts.forEach(c=>{if(!c.estado)c.estado=getEstado(c.phone);if(!c.fuMsgIdx)c.fuMsgIdx={1:-1,2:-1,3:-1};});saveStorage('all');populateCampSelect();renderAll();toast('✅ '+contacts.length+' contatos importados!');}catch(err){alert('Arquivo inválido.');}};r.readAsText(f);}
 function exportCSV(){
   const rows=[['Nome','Telefone','Estado','Status','Campanha','Último Contato','Retornar em','Nível FU','Enviado em','Anotações']];
   contacts.forEach(c=>{const camp=campaigns.find(cp=>cp.id===c.campaign);rows.push([c.nome,c.phone,c.estado||'?',c.status,camp?camp.name:'—',c.lastContact||'',c.nextContact||'',c.fuLevel,c.sentAt||'',c.notes||'']);});
@@ -4274,7 +4451,7 @@ function renderKanban(){
 function moveKanbanCard(contactIdx,colId){
   if(!colId||!contacts[contactIdx])return;
   contacts[contactIdx].kanbanStage=colId;
-  saveStorage();
+  saveStorage(contactIdx);
   renderKanban();
   const col=getKanbanCols().find(c=>c.id===colId);
   toast('↔ '+cleanNome(contacts[contactIdx].nome)+' → '+( col?.l||colId));
@@ -4341,7 +4518,7 @@ function deleteKanbanCol(id){
   // Move leads para primeira coluna restante
   const firstOther=cols.find(c=>c.id!==id);
   contacts.forEach(c=>{if(c.kanbanStage===id)c.kanbanStage=firstOther?.id||'k_novo';});
-  saveStorage();
+  saveStorage('all');
   saveKanbanCols(cols.filter(c=>c.id!==id));
   const modal=document.querySelector('[data-kbedit]');
   if(modal)modal.remove();
