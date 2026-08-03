@@ -554,6 +554,10 @@ body,input,select,textarea,.card,.modal,.ci,.crm-card,.stat-box,.fu-card,.tpl-ca
           <label style="font-size:.76rem;color:var(--taupe);">a</label>
           <input type="number" id="iMax" value="7" min="1" max="60" style="width:52px;">
           <label style="font-size:.76rem;color:var(--taupe);">min</label>
+          <select id="intervalPreset" onchange="handleIntervalPresetChange()" style="min-width:150px;">
+            <option value="minutes" selected>⏱ Padrão em minutos</option>
+            <option value="6s">⚡ 6 segundos</option>
+          </select>
           <span id="iHint" style="font-size:.72rem;color:#aaa;">🎲 aleatório</span>
         </div>
         <div class="timer-btns" style="align-items:center;flex-wrap:wrap;gap:6px;">
@@ -1845,6 +1849,7 @@ function toggleSuspectOnly(){
   initSupabase();
   loadStorage(); // carrega localStorage primeiro (resposta rápida)
   buildMsgList();populateCampSelect();renderAll();renderTemplates();
+  restoreIntervalPreset();
   const upd=()=>{const el=$id('saudacaoLive');if(el)el.textContent='🌅 '+getSaudacao();};
   upd();setInterval(upd,60000);
   // Depois tenta Supabase em background
@@ -2168,6 +2173,27 @@ function getRandInt(){
   return Math.floor(Math.random()*(hi-lo+1)+lo);
 }
 
+function getIntervalPreset(){
+  return $id('intervalPreset')?.value||'minutes';
+}
+
+function handleIntervalPresetChange(){
+  const isSixSeconds=getIntervalPreset()==='6s';
+  const minInput=$id('iMin');
+  const maxInput=$id('iMax');
+  if(minInput)minInput.disabled=isSixSeconds;
+  if(maxInput)maxInput.disabled=isSixSeconds;
+  localStorage.setItem('advshot_interval_preset',isSixSeconds?'6s':'minutes');
+  setTxt('iHint',isSixSeconds?'⚡ intervalo fixo de 6 segundos':'🎲 aleatório');
+}
+
+function restoreIntervalPreset(){
+  const saved=localStorage.getItem('advshot_interval_preset')||'minutes';
+  const select=$id('intervalPreset');
+  if(select)select.value=saved==='6s'?'6s':'minutes';
+  handleIntervalPresetChange();
+}
+
 function startAuto(){
   const i=nextP();
   if(i===-1){toast('✅ Todos enviados!');return;}
@@ -2189,17 +2215,48 @@ function scheduleNext(){
   if(lim>0&&sessionSent>=lim){stopAuto();toast('🎯 Meta de '+lim+' disparos atingida!',4000);return;}
   // Auto-ajuste do intervalo pelo risco do Anti-Ban Guard
   const risk=getBanRiskLevel();
-  let mn=parseInt($id('iMin')?.value)||3, mx=parseInt($id('iMax')?.value)||7;
-  if(risk.level==='medium'){mn=Math.max(mn,5);mx=Math.max(mx,10);toast('⚠️ Ritmo alto — intervalo aumentado automaticamente.',3000);}
-  else if(risk.level==='high'){mn=Math.max(mn,10);mx=Math.max(mx,20);toast('🔴 Risco alto — intervalo elevado para proteção.',4000);}
-  else if(risk.level==='critical'){stopAuto();toast('🚫 Risco crítico — disparo automático pausado pelo Anti-Ban Guard.',5000);showNowArea();return;}
-  const lo=Math.min(mn,mx),hi=Math.max(mn,mx);
-  const m=Math.floor(Math.random()*(hi-lo+1)+lo);
-  totalSecs=m*60;
+  const preset=getIntervalPreset();
+  let intervalLabel='';
+
+  if(risk.level==='critical'){
+    stopAuto();
+    toast('🚫 Risco crítico — disparo automático pausado pelo Anti-Ban Guard.',5000);
+    showNowArea();
+    return;
+  }
+
+  if(preset==='6s'){
+    totalSecs=6;
+    if(risk.level==='medium'){
+      totalSecs=10;
+      toast('⚠️ Ritmo alto — intervalo de 6s aumentado para 10s.',3000);
+    }else if(risk.level==='high'){
+      totalSecs=20;
+      toast('🔴 Risco alto — intervalo de 6s aumentado para 20s.',4000);
+    }
+    intervalLabel=totalSecs+'s';
+  }else{
+    let mn=parseInt($id('iMin')?.value)||3;
+    let mx=parseInt($id('iMax')?.value)||7;
+    if(risk.level==='medium'){
+      mn=Math.max(mn,5);
+      mx=Math.max(mx,10);
+      toast('⚠️ Ritmo alto — intervalo aumentado automaticamente.',3000);
+    }else if(risk.level==='high'){
+      mn=Math.max(mn,10);
+      mx=Math.max(mx,20);
+      toast('🔴 Risco alto — intervalo elevado para proteção.',4000);
+    }
+    const lo=Math.min(mn,mx),hi=Math.max(mn,mx);
+    const minutes=Math.floor(Math.random()*(hi-lo+1)+lo);
+    totalSecs=minutes*60;
+    intervalLabel=minutes+' min';
+  }
+
   secsLeft=totalSecs;
   cdDeadline=Date.now()+(totalSecs*1000);
   const limInfo=lim>0?' · '+sessionSent+'/'+lim:'';
-  setTxt('iHint','🎲 '+m+' min'+(risk.level!=='low'?' · risco '+risk.level:'')+limInfo);
+  setTxt('iHint',(preset==='6s'?'⚡ ':'🎲 ')+intervalLabel+(risk.level!=='low'?' · risco '+risk.level:'')+limInfo);
   hideNowArea();
   drawCD();
   cdInterval=setInterval(cdTick,500);
