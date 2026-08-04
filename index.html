@@ -536,6 +536,9 @@ body,input,select,textarea,.card,.modal,.ci,.crm-card,.stat-box,.fu-card,.tpl-ca
           <option value="contato-duplo">👥 Contato Duplo</option>
           <option value="sem-tag">⚪ Sem tag</option>
         </select>
+        <select id="dispStateFilter" onchange="setDispStateFilter(this.value)" style="min-width:145px;" title="Filtrar os contatos pelo estado">
+          <option value="all">🗺️ Todos os estados</option>
+        </select>
         <span class="disp-tag-count" id="dispTagFilterCount"></span>
       </div>
       <!-- PROGRESSO -->
@@ -1755,6 +1758,8 @@ let batchMode=false, selectedLeads=new Set();
 let hideSent=true;
 let suspectOnly=false;
 let dispTagFilter='all';
+let dispStateFilter=localStorage.getItem('advshot_disp_state_filter')||'all';
+let dispStateOptionsSignature='';
 
 // O array mantém todos os leads, mas o DOM renderiza somente lotes pequenos.
 // Isso evita travar o navegador com milhares de cards ao mesmo tempo.
@@ -1791,6 +1796,45 @@ function contactMatchesTagFilter(contact){
   if(dispTagFilter==='contato-duplo')return flags.isDuplicate;
   if(dispTagFilter==='sem-tag')return !flags.normalized;
   return true;
+}
+
+function normalizeContactState(value){
+  const state=String(value||'').trim().toUpperCase();
+  return /^[A-Z]{2}$/.test(state)?state:'?';
+}
+
+function contactMatchesStateFilter(contact){
+  if(dispStateFilter==='all')return true;
+  return normalizeContactState(contact.estado)===dispStateFilter;
+}
+
+function contactMatchesDispatchFilters(contact){
+  return contactMatchesTagFilter(contact)&&contactMatchesStateFilter(contact);
+}
+
+function updateDispStateFilterOptions(states){
+  const select=$id('dispStateFilter');
+  if(!select)return;
+
+  const sortedStates=[...states].filter(state=>state&&state!=='?').sort();
+  const signature=sortedStates.join('|');
+
+  if(signature!==dispStateOptionsSignature){
+    dispStateOptionsSignature=signature;
+    select.innerHTML='<option value="all">🗺️ Todos os estados</option>'
+      +sortedStates.map(state=>'<option value="'+state+'">📍 '+state+'</option>').join('');
+  }
+
+  const validValue=dispStateFilter==='all'||sortedStates.includes(dispStateFilter)
+    ?dispStateFilter
+    :'all';
+
+  if(validValue!==dispStateFilter){
+    dispStateFilter='all';
+    localStorage.setItem('advshot_disp_state_filter','all');
+  }
+
+  select.value=validValue;
 }
 
 function getContactTagClass(value){
@@ -1833,6 +1877,16 @@ function setDispTagFilter(value){
     'sem-tag':'Sem tag'
   };
   toast('🏷️ Filtro: '+(labels[dispTagFilter]||'Todas as tags'));
+}
+
+function setDispStateFilter(value){
+  dispStateFilter=value||'all';
+  localStorage.setItem('advshot_disp_state_filter',dispStateFilter);
+  resetDispRenderLimit();
+  renderDispSoon();
+  toast(dispStateFilter==='all'
+    ?'🗺️ Exibindo todos os estados'
+    :'📍 Filtro de estado: '+dispStateFilter);
 }
 
 function toggleSuspectOnly(){
@@ -2043,10 +2097,10 @@ function _commitContacts(list){
 
 
 function nextP(){
-  // Mantém as regras anteriores e, quando houver filtro, limita a fila à tag escolhida.
+  // Mantém as regras anteriores e limita a fila aos filtros de tag e estado.
   return contacts.findIndex(c=>
     !c.done&&
-    contactMatchesTagFilter(c)&&
+    contactMatchesDispatchFilters(c)&&
     (isAuto?!isBlacklisted(c):true)
   );
 }
@@ -2416,18 +2470,23 @@ function renderDisp(){
 
   let done=0;
   const visibleIndexes=[];
+  const availableStates=new Set();
 
-  // Uma única passagem pelos 11 mil leads: conta, filtra e guarda somente os índices.
-  // Os cards só são criados para o lote visível abaixo.
+  // Uma única passagem pelos 11 mil leads: conta, reúne os estados,
+  // aplica os filtros combinados e guarda somente os índices visíveis.
   for(let i=0;i<contacts.length;i++){
     const c=contacts[i];
+    const state=normalizeContactState(c.estado);
+    if(state!=='?')availableStates.add(state);
     if(c.done)done++;
     if(hideSent&&c.done)continue;
     const suspect=isSuspectName(c.nome);
     if(suspectOnly&&!suspect)continue;
-    if(!contactMatchesTagFilter(c))continue;
+    if(!contactMatchesDispatchFilters(c))continue;
     visibleIndexes.push(i);
   }
+
+  updateDispStateFilterOptions(availableStates);
 
   setTxt('tot',contacts.length);
   setTxt('sent',done);
