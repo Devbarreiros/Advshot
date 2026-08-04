@@ -556,7 +556,7 @@ body,input,select,textarea,.card,.modal,.ci,.crm-card,.stat-box,.fu-card,.tpl-ca
           <label style="font-size:.76rem;color:var(--taupe);">min</label>
           <select id="intervalPreset" onchange="handleIntervalPresetChange()" style="min-width:150px;">
             <option value="minutes" selected>⏱ Padrão em minutos</option>
-            <option value="6s">⚡ 6 segundos</option>
+            <option value="6s">⚡ 6 segundos — sem bloqueio interno</option>
           </select>
           <span id="iHint" style="font-size:.72rem;color:#aaa;">🎲 aleatório</span>
         </div>
@@ -2184,7 +2184,7 @@ function handleIntervalPresetChange(){
   if(minInput)minInput.disabled=isSixSeconds;
   if(maxInput)maxInput.disabled=isSixSeconds;
   localStorage.setItem('advshot_interval_preset',isSixSeconds?'6s':'minutes');
-  setTxt('iHint',isSixSeconds?'⚡ intervalo fixo de 6 segundos':'🎲 aleatório');
+  setTxt('iHint',isSixSeconds?'⚡ intervalo fixo de 6 segundos · sem bloqueio interno':'🎲 aleatório');
 }
 
 function restoreIntervalPreset(){
@@ -2213,29 +2213,28 @@ function scheduleNext(){
   if(i===-1){stopAuto();toast('✅ Todos os contatos foram abertos!');return;}
   const lim=getSessionLimit();
   if(lim>0&&sessionSent>=lim){stopAuto();toast('🎯 Meta de '+lim+' disparos atingida!',4000);return;}
-  // Auto-ajuste do intervalo pelo risco do Anti-Ban Guard
-  const risk=getBanRiskLevel();
+
   const preset=getIntervalPreset();
   let intervalLabel='';
-
-  if(risk.level==='critical'){
-    stopAuto();
-    toast('🚫 Risco crítico — disparo automático pausado pelo Anti-Ban Guard.',5000);
-    showNowArea();
-    return;
-  }
+  let risk=null;
 
   if(preset==='6s'){
+    // Modo rápido: mantém exatamente 6 segundos.
+    // O Anti-Ban continua registrando e exibindo avisos, mas não aumenta
+    // o intervalo e não pausa automaticamente esta modalidade.
     totalSecs=6;
-    if(risk.level==='medium'){
-      totalSecs=10;
-      toast('⚠️ Ritmo alto — intervalo de 6s aumentado para 10s.',3000);
-    }else if(risk.level==='high'){
-      totalSecs=20;
-      toast('🔴 Risco alto — intervalo de 6s aumentado para 20s.',4000);
-    }
-    intervalLabel=totalSecs+'s';
+    intervalLabel='6s';
   }else{
+    // Modo normal em minutos: mantém todos os bloqueios e ajustes anteriores.
+    risk=getBanRiskLevel();
+
+    if(risk.level==='critical'){
+      stopAuto();
+      toast('🚫 Risco crítico — disparo automático pausado pelo Anti-Ban Guard.',5000);
+      showNowArea();
+      return;
+    }
+
     let mn=parseInt($id('iMin')?.value)||3;
     let mx=parseInt($id('iMax')?.value)||7;
     if(risk.level==='medium'){
@@ -2256,7 +2255,8 @@ function scheduleNext(){
   secsLeft=totalSecs;
   cdDeadline=Date.now()+(totalSecs*1000);
   const limInfo=lim>0?' · '+sessionSent+'/'+lim:'';
-  setTxt('iHint',(preset==='6s'?'⚡ ':'🎲 ')+intervalLabel+(risk.level!=='low'?' · risco '+risk.level:'')+limInfo);
+  const riskInfo=preset==='minutes'&&risk&&risk.level!=='low'?' · risco '+risk.level:'';
+  setTxt('iHint',(preset==='6s'?'⚡ ':'🎲 ')+intervalLabel+riskInfo+limInfo);
   hideNowArea();
   drawCD();
   cdInterval=setInterval(cdTick,500);
