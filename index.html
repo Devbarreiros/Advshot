@@ -2345,38 +2345,91 @@ function onNowClick(){
   }
 }
 
-function _doOpenChat(i){
-  const w=window.open(buildUrl(contacts[i]),'_blank');
-  const popupOk=w&&!w.closed&&typeof w.closed!=='undefined';
+function getPhoneKey(phone){
+  return String(phone||'').replace(/\D/g,'');
+}
 
-  if(!popupOk&&!isAuto){
-    // Manual + popup bloqueado — não arquiva, mostra aviso
+function archiveDispatchedContact(i){
+  const contact=contacts[i];
+  if(!contact)return false;
+
+  const phoneKey=getPhoneKey(contact.phone);
+  const sentAt=new Date().toLocaleString('pt-BR');
+  const contactDate=today();
+  const sentHour=nowHour();
+  const changedIndexes=[];
+
+  // Marca o contato aberto e qualquer cópia do mesmo telefone como enviado.
+  // Isso impede que um mesmo número reapareça na fila automática.
+  for(let j=0;j<contacts.length;j++){
+    const current=contacts[j];
+    const sameContact=j===i||(phoneKey&&getPhoneKey(current.phone)===phoneKey);
+    if(!sameContact)continue;
+
+    if(!current.done)changedIndexes.push(j);
+    current.done=true;
+    current.sentAt=sentAt;
+    current.lastContact=contactDate;
+    current.sentHour=sentHour;
+    current.col_e='ENVIADO';
+    current.col_f=sentAt;
+  }
+
+  // Histórico e contadores contam apenas UM disparo, mesmo se havia duplicata.
+  addHistory(i,getMsg(contact.nome,contact.varIdx),'disparo');
+  incrementDailySent();
+  recordSendEvent(contact);
+
+  // Ao disparar, o lead deve sair imediatamente da lista visível.
+  hideSent=true;
+  const hb=$id('btnHideSent');
+  if(hb)hb.textContent='👁 Mostrar enviados';
+
+  if(contact.xlsxSheetName&&contact.xlsxRowIdx!=null){
+    markXlsxRowSent(contact.xlsxSheetName,contact.xlsxRowIdx);
+  }else if(contact.xlsxRowIdx!=null){
+    markXlsxRowSent(null,contact.xlsxRowIdx);
+  }
+
+  // Persiste pelo ID e também pelo telefone para cobrir CRM/planilha.
+  if(contact.id||contact.phone){
+    markLeadSentInSupabase(contact.id,contact.phone);
+  }
+
+  // Salva somente os contatos alterados; não reenvia os 11 mil.
+  saveStorage(changedIndexes.length?changedIndexes:[i]);
+
+  // Atualiza a interface antes de seguir para o próximo contato.
+  renderDisp();
+  renderHome();
+  renderBanGuard();
+  return true;
+}
+
+function _doOpenChat(i){
+  const contact=contacts[i];
+  if(!contact)return false;
+
+  if(isAuto){
+    // No automático, retira da fila ANTES de abrir o WhatsApp.
+    // Assim o próximo cálculo nunca encontra novamente este contato.
+    archiveDispatchedContact(i);
+
+    const w=window.open(buildUrl(contact),'_blank');
+    const popupOk=w&&!w.closed&&typeof w.closed!=='undefined';
+    if(!popupOk)setDisplay('popupWarn','block');
+    return true;
+  }
+
+  // No manual, mantém a regra anterior: só arquiva se o popup realmente abrir.
+  const w=window.open(buildUrl(contact),'_blank');
+  const popupOk=w&&!w.closed&&typeof w.closed!=='undefined';
+  if(!popupOk){
     setDisplay('popupWarn','block');
     return false;
   }
 
-  if(!popupOk&&isAuto){
-    // Auto + popup bloqueado — avisa mas não bloqueia o fluxo
-    setDisplay('popupWarn','block');
-  }
-
-  // Arquiva o lead (popup abriu ou é modo automático)
-  contacts[i].done=true;
-  contacts[i].sentAt=new Date().toLocaleString('pt-BR');
-  contacts[i].lastContact=today();
-  contacts[i].sentHour=nowHour();
-  addHistory(i,getMsg(contacts[i].nome,contacts[i].varIdx),'disparo');
-  incrementDailySent();
-  recordSendEvent(contacts[i]);
-  hideSent=true;
-  const hb=$id('btnHideSent');if(hb)hb.textContent='👁 Mostrar enviados';
-  if(contacts[i].xlsxSheetName&&contacts[i].xlsxRowIdx!=null){
-    markXlsxRowSent(contacts[i].xlsxSheetName,contacts[i].xlsxRowIdx);
-  }else if(contacts[i].xlsxRowIdx!=null){
-    markXlsxRowSent(null,contacts[i].xlsxRowIdx);
-  }
-  if(contacts[i].id||contacts[i].phone)markLeadSentInSupabase(contacts[i].id,contacts[i].phone);
-  saveStorage(i);renderDisp();renderHome();renderBanGuard();
+  archiveDispatchedContact(i);
   return true;
 }
 
