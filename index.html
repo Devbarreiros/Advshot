@@ -576,7 +576,7 @@ body,input,select,textarea,.card,.modal,.ci,.crm-card,.stat-box,.fu-card,.tpl-ca
             </select>
           </div>
           <button class="btn btn-dark" id="btnStart" onclick="startAuto()">▶ Iniciar</button>
-          <button class="btn btn-orange" id="btnPause" onclick="togglePause()" style="display:none;">⏸ Pausar</button>
+          <button class="btn btn-orange" id="btnPause" onclick="togglePause(event)" style="display:none;">⏸ Pausar</button>
           <button class="btn btn-red" id="btnStop" onclick="stopAuto()" style="display:none;">⏹ Parar</button>
         </div>
         <div class="paused-banner" id="pausedBanner">⏸ PAUSADO — Clique em "Continuar" para retomar</div>
@@ -1407,8 +1407,8 @@ async function loadFromSupabase(){
       // Log diagnóstico (task #10)
       const total=contacts.length;
       const dispatched=contacts.filter(c=>c.done).length;
-      const pending=contacts.filter(c=>!c.done&&!isBlacklisted(c)).length;
-      const nextIdx=contacts.findIndex(c=>!c.done&&!isBlacklisted(c));
+      const pending=contacts.filter(c=>!c.done).length;
+      const nextIdx=contacts.findIndex(c=>!c.done);
       const nextC=nextIdx>=0?contacts[nextIdx]:null;
       console.log('[ADV Shot] ── Carga do Supabase ──────────────────────');
       console.log('[ADV Shot] Total carregados:',total);
@@ -2097,29 +2097,24 @@ function _commitContacts(list){
 
 
 function nextP(){
-  // Mantém as regras anteriores e limita a fila aos filtros de tag e estado.
+  // A fila respeita apenas os filtros escolhidos (tag/estado) e o status de enviado.
+  // Status de blacklist continua visível no CRM/avisos, mas NÃO bloqueia o disparo.
   return contacts.findIndex(c=>
     !c.done&&
-    contactMatchesDispatchFilters(c)&&
-    (isAuto?!isBlacklisted(c):true)
+    contactMatchesDispatchFilters(c)
   );
 }
 function openChat(i){
   const c=contacts[i];
-  // Blacklist warning for manual clicks
-  if(isBlacklisted(c)&&!isAuto){
-    _blPendingIdx=i;
+  if(!c)return false;
+
+  // Blacklist/status de risco vira apenas aviso visual.
+  // O disparo continua liberado quando o usuário clica em ▶.
+  if(isBlacklisted(c)){
     const lbl=STOPTS.find(s=>s.v===c.status)?.l||c.status;
-    const body=$id('blBody');
-    if(body) body.innerHTML=
-      '<div class="bl-warn">'
-      +'<div class="bl-name">'+esc(cleanNome(c.nome))+' <span class="estado-badge">'+(c.estado||'?')+'</span></div>'
-      +'<div class="bl-status">Status: <strong>'+lbl+'</strong></div>'
-      +'<div style="font-size:.76rem;color:var(--black);line-height:1.5;">Este contato já foi marcado como <strong>'+lbl+'</strong>.<br>Enviar pode ser invasivo e aumenta o risco de bloqueio no WhatsApp.</div>'
-      +'</div>';
-    $id('blModal').classList.add('open');
-    return false;
+    toast('🔴 Aviso: '+cleanNome(c.nome)+' está marcado como '+lbl+' — envio liberado.',3500);
   }
+
   return _doOpenChat(i);
 }
 
@@ -2264,42 +2259,22 @@ function startAuto(){
 function scheduleNext(){
   clearInterval(cdInterval);
   const i=nextP();
-  if(i===-1){stopAuto();toast('✅ Todos os contatos foram abertos!');return;}
+  if(i===-1){stopAuto();toast('✅ Todos os contatos deste filtro foram abertos!');return;}
   const lim=getSessionLimit();
   if(lim>0&&sessionSent>=lim){stopAuto();toast('🎯 Meta de '+lim+' disparos atingida!',4000);return;}
 
   const preset=getIntervalPreset();
+  const risk=getBanRiskLevel(); // apenas monitoramento visual
   let intervalLabel='';
-  let risk=null;
 
   if(preset==='6s'){
-    // Modo rápido: mantém exatamente 6 segundos.
-    // O Anti-Ban continua registrando e exibindo avisos, mas não aumenta
-    // o intervalo e não pausa automaticamente esta modalidade.
     totalSecs=6;
     intervalLabel='6s';
   }else{
-    // Modo normal em minutos: mantém todos os bloqueios e ajustes anteriores.
-    risk=getBanRiskLevel();
-
-    if(risk.level==='critical'){
-      stopAuto();
-      toast('🚫 Risco crítico — disparo automático pausado pelo Anti-Ban Guard.',5000);
-      showNowArea();
-      return;
-    }
-
-    let mn=parseInt($id('iMin')?.value)||3;
-    let mx=parseInt($id('iMax')?.value)||7;
-    if(risk.level==='medium'){
-      mn=Math.max(mn,5);
-      mx=Math.max(mx,10);
-      toast('⚠️ Ritmo alto — intervalo aumentado automaticamente.',3000);
-    }else if(risk.level==='high'){
-      mn=Math.max(mn,10);
-      mx=Math.max(mx,20);
-      toast('🔴 Risco alto — intervalo elevado para proteção.',4000);
-    }
+    // Modo normal mantém EXATAMENTE o intervalo escolhido pelo usuário.
+    // O Anti-Ban não aumenta tempo e não pausa mais o disparador.
+    const mn=parseInt($id('iMin')?.value)||3;
+    const mx=parseInt($id('iMax')?.value)||7;
     const lo=Math.min(mn,mx),hi=Math.max(mn,mx);
     const minutes=Math.floor(Math.random()*(hi-lo+1)+lo);
     totalSecs=minutes*60;
@@ -2309,7 +2284,7 @@ function scheduleNext(){
   secsLeft=totalSecs;
   cdDeadline=Date.now()+(totalSecs*1000);
   const limInfo=lim>0?' · '+sessionSent+'/'+lim:'';
-  const riskInfo=preset==='minutes'&&risk&&risk.level!=='low'?' · risco '+risk.level:'';
+  const riskInfo=risk&&risk.level!=='low'?' · ⚠️ risco '+risk.label.toLowerCase():'';
   setTxt('iHint',(preset==='6s'?'⚡ ':'🎲 ')+intervalLabel+riskInfo+limInfo);
   hideNowArea();
   drawCD();
@@ -2408,28 +2383,31 @@ function archiveDispatchedContact(i){
 
 function _doOpenChat(i){
   const contact=contacts[i];
-  if(!contact)return false;
+  if(!contact||contact.done)return false;
 
-  if(isAuto){
-    // No automático, retira da fila ANTES de abrir o WhatsApp.
-    // Assim o próximo cálculo nunca encontra novamente este contato.
-    archiveDispatchedContact(i);
+  // Captura a URL antes de alterar o contato.
+  const url=buildUrl(contact);
 
-    const w=window.open(buildUrl(contact),'_blank');
-    const popupOk=w&&!w.closed&&typeof w.closed!=='undefined';
-    if(!popupOk)setDisplay('popupWarn','block');
-    return true;
+  // Abre primeiro para preservar o gesto do clique do usuário.
+  // Alguns navegadores/extensões abrem a aba mas retornam null em window.open().
+  // Por isso o retorno do popup NÃO decide mais se o lead será arquivado.
+  let w=null;
+  try{
+    w=window.open(url,'_blank');
+  }catch(e){
+    console.warn('[ADV Shot] Falha ao solicitar abertura do WhatsApp:',e);
   }
 
-  // No manual, mantém a regra anterior: só arquiva se o popup realmente abrir.
-  const w=window.open(buildUrl(contact),'_blank');
+  // O clique em ▶ (manual ou automático) é a fonte de verdade do disparador:
+  // marca enviado e retira da lista imediatamente, sem depender do popupOk.
+  archiveDispatchedContact(i);
+
   const popupOk=w&&!w.closed&&typeof w.closed!=='undefined';
   if(!popupOk){
     setDisplay('popupWarn','block');
-    return false;
+    toast('⚠️ O navegador pode ter bloqueado a nova aba. O contato já foi retirado da fila.',3500);
   }
 
-  archiveDispatchedContact(i);
   return true;
 }
 
@@ -2471,13 +2449,19 @@ function skipContact(){
   if(isAuto)scheduleNext();
 }
 
-function togglePause(){
+function togglePause(evt){
+  // A extensão antiga pode disparar pauseBtn.click() automaticamente quando detecta problema.
+  // Cliques sintéticos (isTrusted=false) viram apenas aviso; clique humano continua funcionando.
+  if(evt&&evt.isTrusted===false){
+    toast('🔴 Alerta externo recebido — disparador NÃO foi pausado.',3500);
+    renderBanGuard();
+    return;
+  }
+
   if(!isPaused){
-    // PAUSAR: salva o tempo restante
     secsLeft=Math.max(0,Math.round((cdDeadline-Date.now())/1000));
     isPaused=true;
   }else{
-    // RETOMAR: estende o deadline pelo tempo restante salvo
     cdDeadline=Date.now()+(secsLeft*1000);
     isPaused=false;
   }
@@ -2924,30 +2908,16 @@ function recordSendEvent(contact){
 function getHourlySentCount(){return getSendLog().filter(i=>i.timestamp>=Date.now()-36e5).length;}
 function isBanLocked(){const s=getBanGuardState();return s.lockedUntil&&Date.now()<s.lockedUntil;}
 function isRecoveryMode(){const s=getBanGuardState();if(isBanLocked())return false;return s.recoveryUntil&&Date.now()<s.recoveryUntil;}
-function getCurrentDailyLimit(){if(isBanLocked())return 0;if(isRecoveryMode())return RECOVERY_DAILY_LIMIT;return NORMAL_DAILY_LIMIT;}
-function getCurrentHourlyLimit(){if(isBanLocked())return 0;if(isRecoveryMode())return RECOVERY_HOURLY_LIMIT;return NORMAL_HOURLY_LIMIT;}
+function getCurrentDailyLimit(){if(isRecoveryMode())return RECOVERY_DAILY_LIMIT;return NORMAL_DAILY_LIMIT;}
+function getCurrentHourlyLimit(){if(isRecoveryMode())return RECOVERY_HOURLY_LIMIT;return NORMAL_HOURLY_LIMIT;}
 function formatRemainingTime(ms){const t=Math.ceil(ms/60000),h=Math.floor(t/60),m=t%60;return h<=0?m+'min':h+'h '+m+'min';}
 
 function canSendByBanGuard(){
-  const s=getBanGuardState();
-  if(isBanLocked()){
-    if(isAuto){toast('⚠️ Atenção: conta em bloqueio — use com cautela.',4000);return true;}
-    toast('🚫 Bloqueado por ban. Aguarde '+formatRemainingTime(s.lockedUntil-Date.now())+'.',5000);
-    return false;
-  }
-  const ds=getDailySent(),hs=getHourlySentCount();
-  if(ds>=getCurrentDailyLimit()){
-    if(isAuto){toast('⚠️ Limite diário atingido — continue com cuidado.',3000);return true;}
-    toast('⛔ Limite diário ('+getCurrentDailyLimit()+') atingido. Pause por hoje.',5000);
-    renderBanGuard();return false;
-  }
-  if(hs>=getCurrentHourlyLimit()){
-    if(isAuto){toast('⚠️ '+hs+' na última hora — ritmo alto.',2500);return true;}
-    toast('⛔ '+hs+' na última hora. Use "Liberar +5" no Guard para continuar.',5000);
-    renderBanGuard();return false;
-  }
-  if(hs>=NORMAL_HOURLY_WARN&&!isRecoveryMode()){
-    toast('⚠️ '+hs+'/'+getCurrentHourlyLimit()+' na última hora — ritmo elevado.',2500);
+  // Monitor de risco apenas informativo: nunca bloqueia o envio.
+  const risk=getBanRiskLevel();
+  if(risk.level!=='low'){
+    toast('⚠️ Anti-Ban: '+risk.label+' — aviso apenas, disparos continuam liberados.',3000);
+    renderBanGuard();
   }
   return true;
 }
@@ -2975,11 +2945,11 @@ function releaseBonus(n){
 }
 function getBanRiskLevel(){
   const ds=getDailySent(),hs=getHourlySentCount(),dl=getCurrentDailyLimit(),hl=getCurrentHourlyLimit();
-  if(isBanLocked())return{level:'locked',label:'Bloqueado',color:'#ef4444',msg:'Conta em bloqueio. Não envie mensagens.'};
-  if(isRecoveryMode())return{level:'recovery',label:'Recuperação',color:'#f97316',msg:'Modo recuperação ativo. Use poucos disparos.'};
-  if(ds>=dl||hs>=hl)return{level:'critical',label:'Crítico',color:'#ef4444',msg:'Pare agora. Limite atingido.'};
-  if(ds>=50||hs>=9)return{level:'high',label:'Alto',color:'#ef4444',msg:'Risco alto. Pause algumas horas.'};
-  if(ds>=30||hs>=6)return{level:'medium',label:'Médio',color:'#f97316',msg:'Reduza o ritmo. Aumente o intervalo.'};
+  if(isBanLocked())return{level:'locked',label:'Alerta de bloqueio',color:'#ef4444',msg:'Aviso registrado. O ADV Shot não interromperá seus disparos.'};
+  if(isRecoveryMode())return{level:'recovery',label:'Recuperação',color:'#f97316',msg:'Aviso de recuperação ativo. Disparos continuam liberados.'};
+  if(ds>=dl||hs>=hl)return{level:'critical',label:'Crítico',color:'#ef4444',msg:'Limite de referência atingido. Aviso apenas.'};
+  if(ds>=50||hs>=9)return{level:'high',label:'Alto',color:'#ef4444',msg:'Risco alto detectado. Aviso apenas.'};
+  if(ds>=30||hs>=6)return{level:'medium',label:'Médio',color:'#f97316',msg:'Ritmo elevado detectado. Aviso apenas.'};
   return{level:'low',label:'Baixo',color:'#22c55e',msg:'Ritmo seguro.'};
 }
 function reportWhatsAppBan(hours){
@@ -2989,8 +2959,8 @@ function reportWhatsAppBan(hours){
   const history=(prev.history||[]);
   history.push({ts:Date.now(),hours,date:new Date().toLocaleString('pt-BR')});
   saveBanGuardState({...prev,reportedAt:Date.now(),lockedUntil:lu,recoveryUntil:ru,history});
-  if(isAuto)stopAuto();renderBanGuard();renderDailyCounter();
-  toast('🚫 Banimento registrado. Bloqueado por '+hours+'h.',5000);
+  renderBanGuard();renderDailyCounter();
+  toast('🚫 Banimento registrado como aviso por '+hours+'h. Disparos continuam liberados.',5000);
 }
 function clearBanGuardLock(){
   const s=getBanGuardState();
@@ -2999,7 +2969,7 @@ function clearBanGuardLock(){
 }
 function activateSafeMode(){
   saveBanGuardState({...getBanGuardState(),recoveryUntil:Date.now()+RECOVERY_HOURS_AFTER_BAN*36e5,safeModeAt:Date.now()});
-  if(isAuto)stopAuto();renderBanGuard();renderDailyCounter();toast('🟡 Modo seguro ativado por 72h.',4000);
+  renderBanGuard();renderDailyCounter();toast('🟡 Modo seguro visual ativado por 72h — sem bloqueio de disparos.',4000);
 }
 function renderBanGuard(){
   const el=$id('banGuard');if(!el)return;
@@ -3010,7 +2980,7 @@ function renderBanGuard(){
   if(isBanLocked())extra='<div style="font-size:.74rem;color:#ef4444;margin-top:4px;font-weight:700;">⏳ '+formatRemainingTime(s.lockedUntil-Date.now())+' restantes</div>';
   else if(isRecoveryMode())extra='<div style="font-size:.74rem;color:#f97316;margin-top:4px;font-weight:700;">🟡 Recuperação: '+formatRemainingTime(s.recoveryUntil-Date.now())+'</div>';
   el.innerHTML='<div class="card" style="border:2px solid '+risk.color+';margin-bottom:10px;">'
-    +'<div class="card-title">🛡️ Anti-Ban Guard</div>'
+    +'<div class="card-title">🛡️ Monitor de Risco · apenas aviso</div>'
     +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">'
     +'<div style="width:10px;height:10px;border-radius:50%;background:'+risk.color+';flex-shrink:0;"></div>'
     +'<div><div style="font-size:.84rem;font-weight:700;color:'+risk.color+';">'+risk.label+'</div>'
@@ -3070,9 +3040,9 @@ function renderDailyCounter(){
   const pct=Math.min(100,Math.round(n/limit*100));
   const cls=n>=limit?'danger':n>=60?'warn':'';
   const msg=n>=limit
-    ?'⛔ Limite atingido! Pare os disparos hoje.'
-    :n>=60?`⚠️ Atenção — ${limit-n} mensagens restantes hoje`
-    :`${limit-n} mensagens disponíveis hoje`;
+    ?'🔴 Limite de referência atingido — disparos continuam liberados.'
+    :n>=60?`⚠️ Atenção — referência de ${limit-n} mensagens até o limite`
+    :`${limit-n} mensagens até o limite de referência`;
   el.innerHTML=`<div class="daily-box ${cls}">
     <div class="daily-n">${n}</div>
     <div style="flex:1;">
@@ -4737,7 +4707,7 @@ function buildSmartQueue(){
   const prio=modal?.querySelector('#sq-prio')?.value||$id('sq-prio')?.value||'score';
   if(modal)modal.remove();
   // Filtra leads elegíveis
-  let pool=contacts.filter(c=>!c.done&&!isBlacklisted(c));
+  let pool=contacts.filter(c=>!c.done);
   if(estado)pool=pool.filter(c=>(c.estado||'')=== estado);
   // Prioridade
   if(prio==='score')pool.sort((a,b)=>calculateLeadScore(b)-calculateLeadScore(a));
