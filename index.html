@@ -1345,7 +1345,7 @@ function rowToContact(r){
     id:r.id,phone:r.phone,nome:r.nome,estado:r.estado||'?',
     status:r.status||'pendente',service:r.service||'—',
     campaign:r.campaign||'default',notes:r.notes||'',
-    done:r.done||false,sentAt:r.sent_at,lastContact:r.last_contact,
+    done:(r.done||isFastSentContact(r))||false,sentAt:r.sent_at,lastContact:r.last_contact,
     nextContact:r.next_contact,fuLevel:r.fu_level||0,
     fuMsgIdx:r.fu_msg_idx||{1:-1,2:-1,3:-1},history:r.history||[],
     varIdx:r.var_idx||0,sentHour:r.sent_hour,xlsxRowIdx:r.xlsx_row_idx,
@@ -2320,6 +2320,50 @@ function onNowClick(){
   }
 }
 
+const FAST_SENT_KEY='advshot_fast_sent_v1';
+
+function getFastSentMarkers(){
+  try{
+    return JSON.parse(localStorage.getItem(FAST_SENT_KEY)||'{}')||{};
+  }catch(e){
+    return {};
+  }
+}
+
+function buildFastSentKeys(contact){
+  const keys=[];
+  if(contact?.id)keys.push('id:'+String(contact.id));
+  const phoneKey=String(contact?.phone||'').replace(/\D/g,'');
+  if(phoneKey)keys.push('phone:'+phoneKey);
+  return keys;
+}
+
+function markFastSent(contact,sentAt){
+  try{
+    const markers=getFastSentMarkers();
+    const stamp=sentAt||new Date().toLocaleString('pt-BR');
+    buildFastSentKeys(contact).forEach(key=>{markers[key]=stamp;});
+    localStorage.setItem(FAST_SENT_KEY,JSON.stringify(markers));
+  }catch(e){
+    console.warn('[ADV Shot] fast sent cache:',e?.message||e);
+  }
+}
+
+function isFastSentContact(contact){
+  const markers=getFastSentMarkers();
+  return buildFastSentKeys(contact).some(key=>Boolean(markers[key]));
+}
+
+function clearFastSentMarker(id,phone){
+  try{
+    const markers=getFastSentMarkers();
+    if(id)delete markers['id:'+String(id)];
+    const phoneKey=String(phone||'').replace(/\D/g,'');
+    if(phoneKey)delete markers['phone:'+phoneKey];
+    localStorage.setItem(FAST_SENT_KEY,JSON.stringify(markers));
+  }catch(e){}
+}
+
 function getPhoneKey(phone){
   return String(phone||'').replace(/\D/g,'');
 }
@@ -2330,6 +2374,11 @@ function archiveDispatchedContact(i){
 
   const phoneKey=getPhoneKey(contact.phone);
   const sentAt=new Date().toLocaleString('pt-BR');
+
+  // Persistência mínima e SÍNCRONA antes de abrir o WhatsApp.
+  // Mesmo se a aba for suspensa/recarregada, este telefone continua como enviado.
+  markFastSent(contact,sentAt);
+
   const contactDate=today();
   const sentHour=nowHour();
   const changedIndexes=[];
@@ -2374,6 +2423,13 @@ function archiveDispatchedContact(i){
   // Salva somente os contatos alterados; não reenvia os 11 mil.
   saveStorage(changedIndexes.length?changedIndexes:[i]);
 
+  // Some do DOM no mesmo clique, antes de qualquer troca de aba.
+  // renderDisp() vem logo depois para recalcular contadores e o próximo contato.
+  if(hideSent){
+    const card=$id('disp-contact-'+i);
+    if(card)card.remove();
+  }
+
   // Atualiza a interface antes de seguir para o próximo contato.
   renderDisp();
   renderHome();
@@ -2385,22 +2441,19 @@ function _doOpenChat(i){
   const contact=contacts[i];
   if(!contact||contact.done)return false;
 
-  // Captura a URL antes de alterar o contato.
+  // Monta a URL enquanto o contato ainda está intacto.
   const url=buildUrl(contact);
 
-  // Abre primeiro para preservar o gesto do clique do usuário.
-  // Alguns navegadores/extensões abrem a aba mas retornam null em window.open().
-  // Por isso o retorno do popup NÃO decide mais se o lead será arquivado.
+  // REGRA PRINCIPAL: o ▶ arquiva PRIMEIRO e abre o WhatsApp DEPOIS.
+  // Assim o lead some da fila no mesmo clique e não pode ser escolhido novamente.
+  archiveDispatchedContact(i);
+
   let w=null;
   try{
     w=window.open(url,'_blank');
   }catch(e){
     console.warn('[ADV Shot] Falha ao solicitar abertura do WhatsApp:',e);
   }
-
-  // O clique em ▶ (manual ou automático) é a fonte de verdade do disparador:
-  // marca enviado e retira da lista imediatamente, sem depender do popupOk.
-  archiveDispatchedContact(i);
 
   const popupOk=w&&!w.closed&&typeof w.closed!=='undefined';
   if(!popupOk){
@@ -2546,7 +2599,7 @@ function renderDisp(){
       ?'<span class="contact-tag-badge '+tagClass+'" title="'+esc(rawTags)+'">'+esc(rawTags)+'</span>'
       :'';
 
-    html.push('<div class="ci '+(c.done?'done ':'')+(i===ni?'active-item':'')+'"'
+    html.push('<div id="disp-contact-'+i+'" class="ci '+(c.done?'done ':'')+(i===ni?'active-item':'')+'"'
       +(suspect?' style="background:rgba(239,68,68,0.08);border-left:3px solid #ef4444;"':'')+'>'
       +'<span class="idx">'+(i+1)+'</span>'
       +'<div class="ci-info">'
@@ -4267,6 +4320,10 @@ function loadStorage(){
       if(!c.history)c.history=[];
       if(!c.service)c.service='—';
       if(c.varIdx===undefined||c.varIdx===null||isNaN(c.varIdx))c.varIdx=0;
+      if(isFastSentContact(c)){
+        c.done=true;
+        c.col_e='ENVIADO';
+      }
     });
     const sw=localStorage.getItem('sheetsWebhook');
     if(sw&&!webhooks.find(w=>w.url===sw)){webhooks.push({id:'w0',name:'CRM Principal',url:sw});}
@@ -4755,7 +4812,10 @@ function markLeadSentInSupabase(id,phone){
     .then(([r1,r2])=>{
       const err=r1?.error||r2?.error;
       if(err)console.warn('[ADV Shot] markLeadSent error:',err.message);
-      else console.log('[ADV Shot] ✅ Marcado enviado no Supabase — id:',id,'phone:',phone);
+      else{
+        clearFastSentMarker(id,phone);
+        console.log('[ADV Shot] ✅ Marcado enviado no Supabase — id:',id,'phone:',phone);
+      }
     })
     .catch(e=>console.warn('[ADV Shot] markLeadSent:',e));
 }
